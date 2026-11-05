@@ -1,0 +1,275 @@
+# Derived from release.yml; keep Rust/eBPF/cross-toolchain steps aligned with it.
+name: Fork build
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Linux architecture to build (static musl, full UI)
+        type: choice
+        options:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+        default: x86_64-unknown-linux-musl
+      doona_sha:
+        description: Full commit SHA from fanw86/doona to embed
+        type: string
+        required: true
+        default: 8a4c2c8a44755d86f7b1ef572a07b2611892f6bd
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-build-${{ github.ref }}-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ${{ inputs.target }}
+            suffix: ""
+            variant: full
+            name_suffix: "-full"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Manual runs can select a branch whose name contains '/', which cannot
+      # appear in an asset path. Tags keep the existing debug/v* spelling.
+      - name: Resolve artifact name
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/tags/debug.* ]]; then
+            prefix=debug
+          else
+            prefix=${GITHUB_REF_NAME//\//-}
+          fi
+          echo "ARTIFACT_NAME=honk-core-$prefix-${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}" >> "$GITHUB_ENV"
+
+      - name: Read Rust toolchains
+        id: toolchain
+        run: |
+          set -euo pipefail
+          echo "stable=$(grep -oP '^channel\s*=\s*\"\K[^\"]+' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+          echo "ebpf=$(grep -oP '^channel\s*=\s*\"\K[^\"]+' crates/honk-ebpf/rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+
+      - name: Install Rust stable (with target)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.stable }}
+          target: ${{ matrix.target }}
+
+      - name: Install Rust nightly (for the eBPF object)
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.ebpf }}
+          components: rust-src, llvm-tools
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: ${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}
+          cache-on-failure: true
+          save-if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          workspaces: |
+            . -> target
+            crates/honk-ebpf -> target
+
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang llvm libbpf-dev pkg-config cmake libclang-dev zstd
+
+      - name: Install pinned bpf-linker
+        run: |
+          set -euo pipefail
+          source .github/ci/pins.env
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/bpf-linker.tar.zst" \
+            "https://github.com/aya-rs/bpf-linker/releases/download/v$BPF_LINKER_VERSION/bpf-linker-x86_64-unknown-linux-musl.tar.zst"
+          echo "$BPF_LINKER_SHA256  $RUNNER_TEMP/bpf-linker.tar.zst" | sha256sum -c -
+          zstd -dc "$RUNNER_TEMP/bpf-linker.tar.zst" | tar -xf - -C "$CARGO_HOME/bin"
+          bpf-linker --version
+
+      # The eBPF object is target-independent; build it once on the host so
+      # cross builds just pick it up (build.rs locates it when present).
+      - name: Build eBPF object
+        run: |
+          set -euo pipefail
+          cd crates/honk-ebpf
+          cargo build --release -Zbuild-std=core --target bpfel-unknown-none
+
+      # aya refuses objects without BTF ("no BTF parsed for object") — fail
+      # the build here instead of at runtime on a gateway.
+      - name: Verify eBPF object has BTF
+        run: readelf -S crates/honk-ebpf/target/bpfel-unknown-none/release/honk-ebpf | grep -q '\.BTF'
+
+      # boring-sys (BoringSSL, C++) needs a clang-compatible target toolchain:
+      # under cross compilation CMake injects clang-style --target flags into
+      # boring-sys' ASM rules that real GCC rejects, and zig rejects the Rust
+      # triple spelling — ci/zigcc / ci/zigcxx strip those flags and re-anchor
+      # on the zig-style target in $ZIGCC_TARGET.
+      - name: Install zig (non-native targets)
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.14.1
+
+      - name: Require an exact doona revision
+        env:
+          DOONA_SHA: ${{ inputs.doona_sha }}
+        run: '[[ "$DOONA_SHA" =~ ^[0-9a-f]{40}$ ]]'
+
+      - name: Check out the doona fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: fanw86/doona
+          ref: ${{ inputs.doona_sha }}
+          path: .fork-doona
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: .fork-doona/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: .fork-doona/pnpm-lock.yaml
+
+      - name: Check and build both doona editions
+        working-directory: .fork-doona
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm build
+          pnpm -C apps/lite install --frozen-lockfile
+          pnpm -C apps/lite build
+          sudo apt-get install -y brotli gzip
+          tools/package.sh
+          version=$(node -p 'JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).version')
+          dir="$RUNNER_TEMP/fork-doona"
+          mkdir -p "$dir" "$dir-lite"
+          tar -xzf "release/doona-$version.tar.gz" -C "$dir"
+          tar -xzf "release/doona-lite-$version.tar.gz" -C "$dir-lite"
+          echo "HONK_DOONA_DIR=$dir" >> "$GITHUB_ENV"
+          git archive --format=tar.gz --prefix=doona/ HEAD > ../fork-doona-source.tar.gz
+          git rev-parse HEAD > ../doona-revision.txt
+
+      - name: Record build sources
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > honk-revision.txt
+          git archive --format=tar.gz --prefix=honk/ HEAD > fork-honk-source.tar.gz
+
+      - name: Upload corresponding sources
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fork-sources-${{ matrix.target }}
+          path: |
+            fork-doona-source.tar.gz
+            fork-honk-source.tar.gz
+            doona-revision.txt
+            honk-revision.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      # The release builds from an exact feature set: `--no-default-features`
+      # below means the native-api-only variant really drops the default-on
+      # clash-api. Allocator variants keep the same protocol and API features.
+      - name: Resolve feature set
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ matrix.variant }}" in
+            full) features=clash-api,native-ui ;;
+            clash-api) features=clash-api ;;
+            native-api) features=native-api ;;
+            *) printf 'unknown variant: %s\n' "${{ matrix.variant }}" >&2; exit 1 ;;
+          esac
+          features="ebpf,rprx,$features"
+          if [[ "${{ matrix.suffix }}" != "-stock" ]]; then
+            features+=,jemalloc
+          fi
+          echo "FEATURES=$features" >> "$GITHUB_ENV"
+
+      # The root rust-toolchain.toml selects the host compiler whose cross
+      # targets were installed above; the eBPF crate has its own nightly pin.
+      - name: Build honk-core (native gnu)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: cargo build --release -p honk-core --no-default-features --features "$FEATURES" --target ${{ matrix.target }}
+
+      - name: Build honk-core (cross via zig wrappers)
+        if: matrix.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          T="${{ matrix.target }}"
+          export ZIGCC_TARGET="${T/-unknown/}"
+          # cc crate wants lowercase CC_<target_with_underscores>; cargo
+          # wants uppercase CARGO_TARGET_<TARGET>.
+          L=$(printf '%s' "$T" | tr '-' '_')
+          U=$(printf '%s' "$T" | tr 'a-z-' 'A-Z_')
+          eval "export CC_${L}=\$PWD/ci/zigcc"
+          eval "export CXX_${L}=\$PWD/ci/zigcxx"
+          eval "export CARGO_TARGET_${U}_LINKER=\$PWD/ci/zigcc"
+          # musl: let zig supply the CRT (Rust's self-contained rcrt1.o and
+          # zig's crt1.o both define _start).
+          if [[ "$T" == *-musl ]]; then
+            eval "export CARGO_TARGET_${U}_RUSTFLAGS='-C link-self-contained=no'"
+          fi
+          # boring-sys generates its bindings with bindgen at build time —
+          # point it at zig's target headers, not the host's.
+          BINDGEN_EXTRA_CLANG_ARGS="$(ci/zig-bindgen-env "$ZIGCC_TARGET")"
+          export BINDGEN_EXTRA_CLANG_ARGS
+          cargo build --release -p honk-core --no-default-features --features "$FEATURES" --target "$T"
+
+      - name: Package artifact
+        run: |
+          set -euo pipefail
+          name="$ARTIFACT_NAME"
+          mkdir -p "dist/$name"
+          cp "target/${{ matrix.target }}/release/honk-core" "dist/$name/"
+          cp LICENSE README.md "dist/$name/"
+          # Both editions keep their own notices. Their GPL-3.0-only license must
+          # match the top-level LICENSE; lean variants embed neither edition.
+          if [[ "${{ matrix.variant }}" == full ]]; then
+            for edition in doona doona-lite; do
+              ui_dir="$HONK_DOONA_DIR"
+              [[ "$edition" != doona-lite ]] || ui_dir="${HONK_DOONA_DIR%/}-lite"
+              if ! cmp -s LICENSE "$ui_dir/LICENSE"; then
+                echo "::error::$edition's LICENSE differs from honk's; ship it under $edition/ again"
+                exit 1
+              fi
+              mkdir "dist/$name/$edition"
+              cp -r "$ui_dir"/{LICENSES,NOTICE,THIRD-PARTY-NOTICES.txt} "dist/$name/$edition/"
+            done
+          fi
+          tar -czf "$name.tar.gz" -C dist "$name"
+
+      - name: Start the packaged x86_64 artifact
+        if: startsWith(matrix.target, 'x86_64-')
+        run: |
+          set -euo pipefail
+          smoke_dir=$(mktemp -d "$RUNNER_TEMP/release-smoke.XXXXXX")
+          trap 'rm -rf "$smoke_dir"' EXIT
+          tar -xzf "$ARTIFACT_NAME.tar.gz" -C "$smoke_dir"
+          "$smoke_dir/$ARTIFACT_NAME/honk-core" --version
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: honk-core-${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}
+          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          retention-days: 14
+
