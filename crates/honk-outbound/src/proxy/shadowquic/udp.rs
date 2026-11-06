@@ -331,12 +331,7 @@ async fn read_control(
     target: SocketAddr,
 ) -> io::Result<()> {
     loop {
-        let peer = super::super::addr::read_reply_source(
-            &mut recv,
-            domain,
-            target,
-        )
-        .await?;
+        let peer = super::super::addr::read_reply_source(&mut recv, domain, target).await?;
         let id = recv.read_u16().await?;
         if events.send(Event::Control(id, peer)).await.is_err() {
             return Ok(());
@@ -489,9 +484,12 @@ mod tests {
         input.extend_from_slice(&(payload.len() as u16).to_be_bytes());
         input.extend_from_slice(&payload);
         let (events, mut receiver) = mpsc::channel(QUEUE);
-        assert!(read_stream(input.as_slice(), &events).await.is_err());
+        read_stream(input.as_slice(), &events).await.unwrap();
         match receiver.recv().await.unwrap() {
-            Event::Data(id, data) => { assert_eq!(id, 9); assert_eq!(data.as_ref(), payload.as_slice()); }
+            Event::Data(id, data) => {
+                assert_eq!(id, 9);
+                assert_eq!(data.as_ref(), payload.as_slice());
+            }
             _ => panic!("expected a complete data frame"),
         }
         assert!(receiver.try_recv().is_err());
@@ -501,20 +499,48 @@ mod tests {
     async fn captured_domain_projection_preserves_reply_identity() {
         let target: SocketAddr = "127.0.0.1:1234".parse().unwrap();
         let other: SocketAddr = "127.0.0.2:1234".parse().unwrap();
-        assert_eq!(wire_address(target, Some("LOCALHOST"), target, Some("localhost")).unwrap(), SocksAddr::Domain("LOCALHOST".into(), 1234));
-        for (peer, name) in [(other, "localhost"), (target, "other.test"), ("127.0.0.1:4321".parse().unwrap(), "localhost")] {
-            assert_eq!(wire_address(peer, Some(name), target, Some("localhost")).unwrap(), SocksAddr::new(peer, None).unwrap());
+        assert_eq!(
+            wire_address(target, Some("LOCALHOST"), target, Some("localhost")).unwrap(),
+            SocksAddr::Domain("LOCALHOST".into(), 1234)
+        );
+        for (peer, name) in [
+            (other, "localhost"),
+            (target, "other.test"),
+            ("127.0.0.1:4321".parse().unwrap(), "localhost"),
+        ] {
+            assert_eq!(
+                wire_address(peer, Some(name), target, Some("localhost")).unwrap(),
+                SocksAddr::new(peer, None).unwrap()
+            );
         }
         let mut input = Vec::new();
-        for (id, address) in [SocksAddr::Domain("LOCALHOST".into(), 1234), SocksAddr::Domain("other.test".into(), 1234), SocksAddr::Domain("localhost".into(), 4321), SocksAddr::new(other, None).unwrap()].into_iter().enumerate() {
+        for (id, address) in [
+            SocksAddr::Domain("LOCALHOST".into(), 1234),
+            SocksAddr::Domain("other.test".into(), 1234),
+            SocksAddr::Domain("localhost".into(), 4321),
+            SocksAddr::new(other, None).unwrap(),
+        ]
+        .into_iter()
+        .enumerate()
+        {
             address.encode(&mut input);
             input.extend_from_slice(&(id as u16).to_be_bytes());
         }
         let (events, mut receiver) = mpsc::channel(QUEUE);
-        assert!(read_control(input.as_slice(), &events, Some("localhost"), target).await.is_err());
-        for (id, expected) in [Some(target), None, None, Some(other)].into_iter().enumerate() {
+        assert!(
+            read_control(input.as_slice(), &events, Some("localhost"), target)
+                .await
+                .is_err()
+        );
+        for (id, expected) in [Some(target), None, None, Some(other)]
+            .into_iter()
+            .enumerate()
+        {
             match receiver.recv().await.unwrap() {
-                Event::Control(actual, peer) => { assert_eq!(actual, id as u16); assert_eq!(peer, expected); }
+                Event::Control(actual, peer) => {
+                    assert_eq!(actual, id as u16);
+                    assert_eq!(peer, expected);
+                }
                 _ => panic!("expected control metadata"),
             }
         }
