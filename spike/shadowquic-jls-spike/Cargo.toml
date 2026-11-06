@@ -1,0 +1,32 @@
+[package]
+name = "shadowquic-jls-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Phase 0 go/no-go spike: JLS-authenticated QUIC + ShadowQUIC framing through quinn-jls"
+
+# Standalone: do not inherit a parent workspace.
+[workspace]
+
+# Same crates honk would add behind a `shadowquic` cargo feature (§3 of plan.md).
+[dependencies]
+quinn-jls = { version = "=0.4.0", default-features = false, features = [
+    "runtime-tokio",
+    "rustls-ring",
+] }
+# Not used directly: this only forces the `ring` crypto-provider feature on the
+# single `rustls-jls` instance that `quinn-jls` re-exports, so
+# `ClientConfig::builder()` has exactly one installable provider. Keep it out of
+# the `aws-lc-rs` features to avoid an ambiguous-provider panic.
+rustls-jls = { version = "1.3.7", default-features = false, features = [
+    "std",
+    "ring",
+] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "net",
+    "io-util",
+    "time",
+] }
+anyhow = "1"

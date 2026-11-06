@@ -1,0 +1,31 @@
+# Phase 0 spike server: one ShadowQUIC inbound, direct outbound.
+#
+# `server-name` must equal the client's `sni`, and `jls-upstream.addr` is
+# required by ShadowQUIC even when nothing is expected to be forwarded
+# (a non-JLS probe is relayed there).
+#
+# Ports/credentials are rewritten by spike/run-spike.sh from its environment.
+
+inbounds:
+  - tag: sq-in
+    type: shadowquic
+    bind-addr: "127.0.0.1:14430"
+    users:
+      - username: "spike-user"
+        password: "spike-pass"
+    # Must match the client SNI and acts as the upstream SNI check.
+    server-name: "shadowquic.test"
+    jls-upstream:
+      addr: "127.0.0.1:14431"
+    alpn: ["h3"]
+    # Keep the spike on the 1-RTT path; 0-RTT is measured separately.
+    zero-rtt: false
+    congestion-control: bbr
+    initial-mtu: 1300
+    min-mtu: 1290
+
+outbounds:
+  - tag: direct-out
+    type: direct
+
+log-level: "info"

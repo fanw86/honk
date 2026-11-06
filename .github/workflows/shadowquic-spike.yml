@@ -1,0 +1,85 @@
+name: ShadowQUIC JLS spike
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SHADOWQUIC_REVISION: ef1c7eb788b087b7e0b3ac99ce9b72f8068f53b1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out reference server
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spongebob888/shadowquic
+          ref: ${{ env.SHADOWQUIC_REVISION }}
+          path: shadowquic
+          persist-credentials: false
+      - name: Read host Rust pin
+        id: toolchain
+        run: echo "stable=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.stable }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: shadowquic-spike
+          cache-on-failure: true
+          workspaces: |
+            shadowquic -> target
+            spike/shadowquic-jls-spike -> target
+      - name: Record inputs and check scripts
+        run: |
+          set -euo pipefail
+          mkdir -p spike/tmp/logs
+          {
+            echo "honk=$(git rev-parse HEAD)"
+            echo "shadowquic=$(git -C shadowquic rev-parse HEAD)"
+            cargo --version
+            rustc --version
+            python3 --version
+          } | tee spike/tmp/logs/inputs.txt
+          test "$(git -C shadowquic rev-parse HEAD)" = "$SHADOWQUIC_REVISION"
+          bash -n spike/run-spike.sh
+          python3 -m py_compile spike/tools/jls_upstream_stub.py
+      - name: Run positive and negative JLS scenarios
+        id: interop
+        run: |
+          set -euo pipefail
+          env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+            timeout --signal=TERM --kill-after=15s 20m \
+            bash spike/run-spike.sh --rebuild-server 2>&1 | tee spike/tmp/logs/harness.log
+      - name: Summarize verdict
+        if: always()
+        env:
+          INTEROP_OUTCOME: ${{ steps.interop.outcome }}
+        run: |
+          {
+            echo '## ShadowQUIC Phase 0'
+            echo "Harness outcome: ${INTEROP_OUTCOME:-not run}"
+            echo 'A pass covers JLS authentication, IPv4/domain TCP echo, multiple streams, and wrong-password rejection.'
+            echo 'UDP and 0-RTT are not exercised. Failure or timeout is not a GO verdict.'
+            echo '```text'
+            cat spike/tmp/logs/inputs.txt 2>/dev/null || true
+            grep -hE 'SPIKE RESULT|is_jls=|jls_chosen_user=|SQ_CONNECT|RESULT:' spike/tmp/logs/spike-*.log spike/tmp/logs/harness.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shadowquic-phase0-evidence
+          path: |
+            spike/tmp/logs/
+            spike/shadowquic-jls-spike/Cargo.lock
+            shadowquic/Cargo.lock
+          if-no-files-found: warn
+          retention-days: 14
