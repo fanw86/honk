@@ -1,5 +1,7 @@
 name: ShadowQUIC core integration
 on:
+  push:
+    branches: [feat/shadowquic-core]
   workflow_dispatch:
 permissions:
   contents: read
