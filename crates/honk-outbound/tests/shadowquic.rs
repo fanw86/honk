@@ -217,7 +217,21 @@ async fn udp_modes_independent_associations_sources_and_size_limits() {
         packet_echo(first.as_ref(), b"", echo.address).await;
         let large = vec![7; 60000];
         if over_stream {
-            packet_echo(first.as_ref(), &large, echo.address).await;
+            let socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+            let target = socket.local_addr().unwrap();
+            let received = tokio::spawn(async move {
+                let mut buffer = vec![0; 65535];
+                let (length, peer) = socket.recv_from(&mut buffer).await.unwrap();
+                assert_eq!(length, 60000);
+                assert!(buffer[..length].iter().all(|byte| *byte == 7));
+                socket.send_to(b"large-ok", peer).await.unwrap();
+            });
+            let transport = handler.dial_udp_transport(&node, target, None, DEADLINE).await.unwrap();
+            transport.send_packet(&large).await.unwrap();
+            let (length, peer) = tokio::time::timeout(DEADLINE, transport.recv_packet(&mut buffer)).await.unwrap().unwrap();
+            assert_eq!(&buffer[..length], b"large-ok");
+            assert_eq!(peer, target);
+            received.await.unwrap();
         } else {
             assert!(first.send_packet(&large).await.is_err());
         }

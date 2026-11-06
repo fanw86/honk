@@ -358,7 +358,7 @@ fn wire_address(
 }
 
 async fn read_stream(
-    mut recv: quinn_jls::RecvStream,
+    mut recv: impl AsyncReadExt + Unpin,
     events: &mpsc::Sender<Event>,
 ) -> io::Result<()> {
     let id = tokio::time::timeout(Duration::from_secs(10), recv.read_u16())
@@ -481,6 +481,21 @@ async fn dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn large_stream_frames_preserve_payload() {
+        let payload = vec![7; MAX_PAYLOAD];
+        let mut input = vec![0, 9];
+        input.extend_from_slice(&(payload.len() as u16).to_be_bytes());
+        input.extend_from_slice(&payload);
+        let (events, mut receiver) = mpsc::channel(QUEUE);
+        assert!(read_stream(input.as_slice(), &events).await.is_err());
+        match receiver.recv().await.unwrap() {
+            Event::Data(id, data) => { assert_eq!(id, 9); assert_eq!(data.as_ref(), payload.as_slice()); }
+            _ => panic!("expected a complete data frame"),
+        }
+        assert!(receiver.try_recv().is_err());
+    }
 
     #[tokio::test]
     async fn captured_domain_projection_preserves_reply_identity() {
