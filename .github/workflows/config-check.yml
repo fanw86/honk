@@ -8,6 +8,10 @@ on:
         required: true
         default: main
         type: string
+      format_only:
+        description: Only verify formatting after whitespace-only changes
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,8 +42,10 @@ jobs:
           cargo fmt --all
           git diff --binary > "$RUNNER_TEMP/rustfmt.patch"
       - name: Configuration tests
+        if: ${{ !inputs.format_only }}
         run: cargo test -p honk-config --locked
       - name: Confirm the valid URI fails on the Phase 0 baseline
+        if: ${{ !inputs.format_only }}
         env:
           BASELINE: eade5bead429f9c4ea12e450dc60a44b99d27b62
         run: |
@@ -55,6 +61,7 @@ jobs:
           test "$result" -ne 0
           grep -q 'shadowquic_uri_baseline_probe .*FAILED' "$RUNNER_TEMP/baseline.log"
       - name: Ensure native build dependencies
+        if: ${{ !inputs.format_only }}
         timeout-minutes: 5
         run: |
           set -euo pipefail
@@ -65,12 +72,15 @@ jobs:
             sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y cmake clang libclang-dev pkg-config
           fi
       - name: Outbound runtime gate
+        if: ${{ !inputs.format_only }}
         run: |
           cargo test -p honk-outbound --locked
           cargo test -p honk-outbound --no-default-features --lib shadowquic_runtime --locked
       - name: Core subscription gate and compilation
+        if: ${{ !inputs.format_only }}
         run: cargo test -p honk-core --lib --features native-api shadowquic_subscription --locked
       - name: Check all workspace targets
+        if: ${{ !inputs.format_only }}
         run: cargo check --workspace --all-targets --features honk-core/native-api --locked
       - name: Check formatting
         run: git diff --exit-code
