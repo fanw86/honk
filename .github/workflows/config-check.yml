@@ -33,8 +33,6 @@ jobs:
         with:
           key: config-integration
           cache-on-failure: true
-      - name: Install native build dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev pkg-config
       - name: Format and preserve formatting patch
         run: |
           cargo fmt --all
@@ -56,6 +54,16 @@ jobs:
           cat "$RUNNER_TEMP/baseline.log"
           test "$result" -ne 0
           grep -q 'shadowquic_uri_baseline_probe .*FAILED' "$RUNNER_TEMP/baseline.log"
+      - name: Ensure native build dependencies
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          if command -v cmake && command -v clang && command -v pkg-config && ldconfig -p | grep -E 'libclang(-[0-9]+)?\.so'; then
+            echo 'Using preinstalled native build tools'
+          else
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 update
+            sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y cmake clang libclang-dev pkg-config
+          fi
       - name: Outbound runtime gate
         run: |
           cargo test -p honk-outbound --locked
