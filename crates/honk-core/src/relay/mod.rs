@@ -15,8 +15,8 @@
 //!          (TCP)              (SOCKS5)                  (TCP)
 //! ```
 
-pub mod splice;
 mod half_close;
+pub mod splice;
 #[cfg(feature = "rprx")]
 mod vision;
 

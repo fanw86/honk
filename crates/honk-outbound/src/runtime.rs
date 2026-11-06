@@ -959,7 +959,8 @@ impl OutboundRuntimeRegistry {
                     node,
                     false,
                     #[cfg(feature = "owned-tasks")]
-                    (own_tasks || (cfg!(feature = "shadowquic") && node.shadowquic().is_some())).then(|| Arc::new(tasks::TaskOwner::production())),
+                    (own_tasks || (cfg!(feature = "shadowquic") && node.shadowquic().is_some()))
+                        .then(|| Arc::new(tasks::TaskOwner::production())),
                     #[cfg(any(feature = "rprx", test))]
                     Arc::clone(&vless_carrier_semaphore),
                 ),

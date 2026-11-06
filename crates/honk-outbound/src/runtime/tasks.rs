@@ -8,7 +8,9 @@ pub(crate) struct SharedTask {
 
 impl SharedTask {
     #[cfg(feature = "shadowquic")]
-    pub(crate) fn is_finished(&self) -> bool { self.abort.is_finished() }
+    pub(crate) fn is_finished(&self) -> bool {
+        self.abort.is_finished()
+    }
 
     pub(crate) fn abort(&self) {
         self.abort.abort();
@@ -197,7 +199,9 @@ pub(crate) fn new_owned_quic_endpoint(
 pub(crate) fn new_owned_jls_endpoint(
     build: impl FnOnce() -> std::io::Result<quinn_jls::Endpoint>,
 ) -> std::io::Result<RuntimeEndpoint<quinn_jls::Endpoint>> {
-    if capture_owner().is_none() { return Err(std::io::ErrorKind::Interrupted.into()); }
+    if capture_owner().is_none() {
+        return Err(std::io::ErrorKind::Interrupted.into());
+    }
     new_owned_endpoint(build, OwnedEndpoint::Jls)
 }
 
@@ -874,6 +878,9 @@ mod tests {
 mod jls_tests {
     #[test]
     fn jls_endpoints_require_a_runtime_owner_before_building() {
-        assert!(super::new_owned_jls_endpoint(|| panic!("unowned endpoint builder must not run")).is_err());
+        assert!(
+            super::new_owned_jls_endpoint(|| panic!("unowned endpoint builder must not run"))
+                .is_err()
+        );
     }
 }

@@ -818,13 +818,25 @@ fn shadowquic_runtime_is_unavailable_until_handler_implementation() {
 async fn shadowquic_preparation_cancelled_during_promotion_is_joined() {
     use crate::proxy::SharedSourceOutbound;
     let server = std::env::var("HONK_SHADOWQUIC_TEST_SERVER").unwrap();
-    let node = Node::from_share_link(&format!("shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#node")).unwrap();
+    let node = Node::from_share_link(&format!(
+        "shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#node"
+    ))
+    .unwrap();
     let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
     let runtime = registry.get(&node.id).unwrap();
-    let prepared = crate::proxy::shadowquic::ShadowQuicHandler::new().prepare_shared_source(
-        Arc::clone(&runtime), "127.0.0.1:12345".parse().unwrap(), None, Duration::from_secs(5), true,
-    ).await.unwrap();
-    let ProtocolRuntime::Quic(quic) = &runtime.runtime else { panic!("expected QUIC runtime") };
+    let prepared = crate::proxy::shadowquic::ShadowQuicHandler::new()
+        .prepare_shared_source(
+            Arc::clone(&runtime),
+            "127.0.0.1:12345".parse().unwrap(),
+            None,
+            Duration::from_secs(5),
+            true,
+        )
+        .await
+        .unwrap();
+    let ProtocolRuntime::Quic(quic) = &runtime.runtime else {
+        panic!("expected QUIC runtime")
+    };
     let held = quic.state.lock().await;
     let promotion = tokio::spawn(prepared.commit());
     tokio::task::yield_now().await;
@@ -832,7 +844,9 @@ async fn shadowquic_preparation_cancelled_during_promotion_is_joined() {
     assert!(promotion.await.unwrap_err().is_cancelled());
     drop(held);
     assert_eq!(runtime.warm_counts().clients, Some(0));
-    tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
+    tokio::time::timeout(Duration::from_secs(5), registry.shutdown())
+        .await
+        .unwrap();
 }
 
 #[cfg(feature = "shadowquic")]
