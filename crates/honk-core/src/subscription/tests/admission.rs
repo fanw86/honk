@@ -782,11 +782,20 @@ fn ignored_xhttp_options_are_type_checked_alike_in_both_spellings() {
 
 #[test]
 fn shadowquic_subscription_is_rejected_until_runtime_exists() {
-    let uri = "shadowquic://private-user:private-password@private-host?sni=cover.example#private-name";
+    let uri =
+        "shadowquic://private-user:private-password@private-host?sni=cover.example#private-name";
     for neighbor in [true, false] {
-        let body = if neighbor { format!("{uri}\nsocks5://127.0.0.1:1080#neighbor\n") } else { uri.to_string() };
+        let body = if neighbor {
+            format!("{uri}\nsocks5://127.0.0.1:1080#neighbor\n")
+        } else {
+            uri.to_string()
+        };
         let mut diagnostics = Vec::new();
-        let result = parse_subscription_content_with_diagnostics(&Subscription::default(), &body, &mut diagnostics);
+        let result = parse_subscription_content_with_diagnostics(
+            &Subscription::default(),
+            &body,
+            &mut diagnostics,
+        );
         if neighbor {
             let nodes = result.unwrap();
             assert_eq!(nodes.len(), 1);
@@ -796,7 +805,12 @@ fn shadowquic_subscription_is_rejected_until_runtime_exists() {
         }
         assert_eq!(diagnostics[0].code, "unsupported-subscription-entry");
         let rendered = format!("{diagnostics:?}");
-        for private in ["private-user", "private-password", "private-host", "private-name"] {
+        for private in [
+            "private-user",
+            "private-password",
+            "private-host",
+            "private-name",
+        ] {
             assert!(!rendered.contains(private));
         }
     }

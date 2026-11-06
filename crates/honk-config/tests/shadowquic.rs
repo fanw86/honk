@@ -7,7 +7,10 @@ const LINK: &str = "shadowquic://user:secret@proxy.example:443?sni=cover.example
 fn shadowquic_defaults_and_credentials() {
     let node = Node::from_share_link(LINK).unwrap();
     assert_eq!(node.protocol(), NodeProtocol::ShadowQuic);
-    assert_eq!("shadowquic".parse::<NodeProtocol>().unwrap(), node.protocol());
+    assert_eq!(
+        "shadowquic".parse::<NodeProtocol>().unwrap(),
+        node.protocol()
+    );
     assert_eq!(node.protocol().as_str(), "shadowquic");
     let config = node.shadowquic().unwrap();
     assert_eq!(config.username.as_deref(), Some("user"));
@@ -18,8 +21,13 @@ fn shadowquic_defaults_and_credentials() {
     assert!(config.zero_rtt);
     assert!(!config.over_stream);
     assert!(node.tls().is_none());
-    let ipv6 = Node::from_share_link("shadowquic://u%3Aname:p%40ss@[::1]:1443?peer=cover.example#ipv6").unwrap();
-    assert_eq!(ipv6.shadowquic().unwrap().username.as_deref(), Some("u:name"));
+    let ipv6 =
+        Node::from_share_link("shadowquic://u%3Aname:p%40ss@[::1]:1443?peer=cover.example#ipv6")
+            .unwrap();
+    assert_eq!(
+        ipv6.shadowquic().unwrap().username.as_deref(),
+        Some("u:name")
+    );
     assert_eq!(ipv6.shadowquic().unwrap().password.as_deref(), Some("p@ss"));
     assert_eq!(ipv6.port, 1443);
 }
@@ -27,24 +35,51 @@ fn shadowquic_defaults_and_credentials() {
 #[test]
 fn shadowquic_uri_rejects_bad_options_without_exposing_values() {
     for suffix in [
-        "sni=", "sni=bad%20name", "sni=a&sni=b", "sni=a&peer=b",
-        "sni=a&%73ni=b", "sni=a&alpn=", "sni=a&alpn=h3,",
-        "sni=a&congestion=private-value", "sni=a&zero-rtt=yes",
-        "sni=a&zero-rtt=1&zero-rtt=0", "sni=a&over-stream=2",
-        "sni=a&half-close-timeout=-1", "sni=a&half-close-timeout=NaN",
-        "sni=a&mtu=1199", "sni=a&mtu=65528", "sni=a&mtu=no",
-        "sni=a&tls=0", "sni=a&security=reality", "sni=a&pbk=private-value",
-        "sni=a&allowInsecure=1", "sni=a&type=ws", "sni=a&unknown=private-value",
+        "sni=",
+        "sni=bad%20name",
+        "sni=a&sni=b",
+        "sni=a&peer=b",
+        "sni=a&%73ni=b",
+        "sni=a&alpn=",
+        "sni=a&alpn=h3,",
+        "sni=a&congestion=private-value",
+        "sni=a&zero-rtt=yes",
+        "sni=a&zero-rtt=1&zero-rtt=0",
+        "sni=a&over-stream=2",
+        "sni=a&half-close-timeout=-1",
+        "sni=a&half-close-timeout=NaN",
+        "sni=a&mtu=1199",
+        "sni=a&mtu=65528",
+        "sni=a&mtu=no",
+        "sni=a&tls=0",
+        "sni=a&security=reality",
+        "sni=a&pbk=private-value",
+        "sni=a&allowInsecure=1",
+        "sni=a&type=ws",
+        "sni=a&unknown=private-value",
     ] {
-        let link = format!("shadowquic://private-user:private-password@private-host:443?{suffix}#private-name");
+        let link = format!(
+            "shadowquic://private-user:private-password@private-host:443?{suffix}#private-name"
+        );
         let mut diagnostics = Vec::new();
-        let error = Node::from_share_link_with_detailed_diagnostics(&link, &mut diagnostics).unwrap_err();
+        let error =
+            Node::from_share_link_with_detailed_diagnostics(&link, &mut diagnostics).unwrap_err();
         let rendered = format!("{error:?} {diagnostics:?}");
-        for private in ["private-user", "private-password", "private-host", "private-name", "private-value"] {
+        for private in [
+            "private-user",
+            "private-password",
+            "private-host",
+            "private-name",
+            "private-value",
+        ] {
             assert!(!rendered.contains(private), "diagnostic leaked {private}");
         }
     }
-    for link in ["shadowquic://u:p@h", "shadowquic://u@h?sni=a", "shadowquic://:p@h?sni=a"] {
+    for link in [
+        "shadowquic://u:p@h",
+        "shadowquic://u@h?sni=a",
+        "shadowquic://:p@h?sni=a",
+    ] {
         assert!(Node::from_share_link(link).is_err());
     }
 }
@@ -54,9 +89,22 @@ fn shadowquic_effective_defaults_and_tuning_preserve_identity() {
     let node = Node::from_share_link(LINK).unwrap();
     let explicit = Node::from_share_link("shadowquic://user:secret@proxy.example:443?sni=cover.example&alpn=h3&congestion=bbr&zero-rtt=true&over-stream=false&mtu=1300&half-close-timeout=60000#renamed").unwrap();
     assert_eq!(node.id, explicit.id);
-    for (field, value) in [("sni", "other.example"), ("alpn", "h3,h2"), ("congestion", "cubic"), ("zero-rtt", "0"), ("over-stream", "1")] {
-        let query = if field == "sni" { format!("sni={value}") } else { format!("sni=cover.example&{field}={value}") };
-        let changed = Node::from_share_link(&format!("shadowquic://user:secret@proxy.example:443?{query}#node")).unwrap();
+    for (field, value) in [
+        ("sni", "other.example"),
+        ("alpn", "h3,h2"),
+        ("congestion", "cubic"),
+        ("zero-rtt", "0"),
+        ("over-stream", "1"),
+    ] {
+        let query = if field == "sni" {
+            format!("sni={value}")
+        } else {
+            format!("sni=cover.example&{field}={value}")
+        };
+        let changed = Node::from_share_link(&format!(
+            "shadowquic://user:secret@proxy.example:443?{query}#node"
+        ))
+        .unwrap();
         assert_ne!(node.id, changed.id, "{field}");
     }
     let a = Node::from_share_link("shadowquic://a%7Cb:c@h?sni=a").unwrap();
@@ -87,7 +135,12 @@ fn shadowquic_flat_roundtrips_and_alias_conflicts() {
 #[test]
 fn shadowquic_direct_construction_validates_alpn_and_mtu() {
     let base = Node::from_share_link(LINK).unwrap();
-    for alpn in [vec![], vec![String::new()], vec!["a".repeat(256)], vec!["a".repeat(255); 256]] {
+    for alpn in [
+        vec![],
+        vec![String::new()],
+        vec!["a".repeat(256)],
+        vec!["a".repeat(255); 256],
+    ] {
         let mut node = base.clone();
         node.shadowquic_mut().unwrap().alpn = alpn;
         assert!(node.validate().is_err());
@@ -111,7 +164,12 @@ fn shadowquic_fields_do_not_load_on_other_protocols() {
     flat["shadowquic_over_stream"] = false.into();
     assert!(serde_json::from_value::<Node>(flat).is_err());
     let sq = Node::from_share_link(LINK).unwrap();
-    for (field, value) in [("tls", serde_json::json!(true)), ("reality_public_key", serde_json::json!("key")), ("tls_alpn", serde_json::json!(["h3"])), ("transport", serde_json::json!("ws"))] {
+    for (field, value) in [
+        ("tls", serde_json::json!(true)),
+        ("reality_public_key", serde_json::json!("key")),
+        ("tls_alpn", serde_json::json!(["h3"])),
+        ("transport", serde_json::json!("ws")),
+    ] {
         let mut flat = serde_json::to_value(&sq).unwrap();
         flat[field] = value;
         assert!(serde_json::from_value::<Node>(flat).is_err());

@@ -13,9 +13,9 @@ use crate::options::vocab::{coalesce_equal, optional_flow, packet_network};
 use crate::types::NodeProtocol;
 
 use super::{
-    AnyTlsConfig, Hysteria2Config, JuicityConfig, Node, OutboundConfig, QuicOptions, ShadowQuicConfig,
-    ShadowsocksConfig, Socks5Config, StreamTransportOptions, TlsOptions, TrojanConfig, TuicConfig,
-    VlessConfig, VlessMultiplex, VlessUdpEncoding, VmessConfig,
+    AnyTlsConfig, Hysteria2Config, JuicityConfig, Node, OutboundConfig, QuicOptions,
+    ShadowQuicConfig, ShadowsocksConfig, Socks5Config, StreamTransportOptions, TlsOptions,
+    TrojanConfig, TuicConfig, VlessConfig, VlessMultiplex, VlessUdpEncoding, VmessConfig,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -226,8 +226,21 @@ impl FlatNode {
             .map_err(|message| ValidationFailure::new(Some(field), message))
         }
 
-        if self.protocol != NodeProtocol::ShadowQuic && (self.shadowquic_username.is_some() || self.shadowquic_password.is_some() || self.shadowquic_server_name.is_some() || self.shadowquic_alpn.is_some() || self.shadowquic_congestion.is_some() || self.shadowquic_zero_rtt.is_some() || self.shadowquic_over_stream.is_some() || self.shadowquic_half_close_timeout.is_some() || self.server_name.is_some()) {
-            return Err(ValidationFailure::new(Some("shadowquic"), "ShadowQUIC fields require the ShadowQUIC protocol"));
+        if self.protocol != NodeProtocol::ShadowQuic
+            && (self.shadowquic_username.is_some()
+                || self.shadowquic_password.is_some()
+                || self.shadowquic_server_name.is_some()
+                || self.shadowquic_alpn.is_some()
+                || self.shadowquic_congestion.is_some()
+                || self.shadowquic_zero_rtt.is_some()
+                || self.shadowquic_over_stream.is_some()
+                || self.shadowquic_half_close_timeout.is_some()
+                || self.server_name.is_some())
+        {
+            return Err(ValidationFailure::new(
+                Some("shadowquic"),
+                "ShadowQUIC fields require the ShadowQUIC protocol",
+            ));
         }
         match self.protocol {
             NodeProtocol::Hysteria2 => {
@@ -254,20 +267,50 @@ impl FlatNode {
                 )?;
             }
             NodeProtocol::ShadowQuic => {
-                if self.tls || self.skip_cert_verify || self.ech_enabled || self.ech_config.is_some()
-                    || self.ech_config_path.is_some() || self.reality_public_key.is_some()
-                    || self.reality_short_id.is_some() || self.reality_spider_x.is_some()
-                    || self.tls_pin_sha256.is_some() || !self.tls_alpn.is_empty()
-                    || !matches!(self.transport.as_str(), "" | "tcp") || self.network.is_some()
-                    || self.ws_path.is_some() || self.ws_host.is_some() || !self.ws_headers.is_empty()
-                    || self.grpc_service.is_some() || self.xhttp.is_some() || self.flow.is_some()
+                if self.tls
+                    || self.skip_cert_verify
+                    || self.ech_enabled
+                    || self.ech_config.is_some()
+                    || self.ech_config_path.is_some()
+                    || self.reality_public_key.is_some()
+                    || self.reality_short_id.is_some()
+                    || self.reality_spider_x.is_some()
+                    || self.tls_pin_sha256.is_some()
+                    || !self.tls_alpn.is_empty()
+                    || !matches!(self.transport.as_str(), "" | "tcp")
+                    || self.network.is_some()
+                    || self.ws_path.is_some()
+                    || self.ws_host.is_some()
+                    || !self.ws_headers.is_empty()
+                    || self.grpc_service.is_some()
+                    || self.xhttp.is_some()
+                    || self.flow.is_some()
                 {
-                    return Err(ValidationFailure::new(Some("shadowquic"), "ShadowQUIC uses mandatory JLS and does not accept TLS, REALITY or stream transport options"));
+                    return Err(ValidationFailure::new(
+                        Some("shadowquic"),
+                        "ShadowQUIC uses mandatory JLS and does not accept TLS, REALITY or stream transport options",
+                    ));
                 }
-                self.shadowquic_username = resolve("shadowquic_username", self.shadowquic_username.take(), self.username.take())?;
-                self.shadowquic_password = resolve("shadowquic_password", self.shadowquic_password.take(), self.password.take())?;
-                self.shadowquic_server_name = resolve("shadowquic_server_name", self.shadowquic_server_name.take(), self.server_name.take())?;
-                self.shadowquic_server_name = resolve("shadowquic_server_name", self.shadowquic_server_name.take(), self.sni.take())?;
+                self.shadowquic_username = resolve(
+                    "shadowquic_username",
+                    self.shadowquic_username.take(),
+                    self.username.take(),
+                )?;
+                self.shadowquic_password = resolve(
+                    "shadowquic_password",
+                    self.shadowquic_password.take(),
+                    self.password.take(),
+                )?;
+                self.shadowquic_server_name = resolve(
+                    "shadowquic_server_name",
+                    self.shadowquic_server_name.take(),
+                    self.server_name.take(),
+                )?;
+                self.shadowquic_server_name = resolve(
+                    "shadowquic_server_name",
+                    self.shadowquic_server_name.take(),
+                    self.sni.take(),
+                )?;
             }
             NodeProtocol::AnyTLS => {
                 self.anytls_password = resolve(
@@ -460,7 +503,10 @@ impl FlatNode {
 
         let quic = matches!(
             self.protocol,
-            NodeProtocol::Hysteria2 | NodeProtocol::Tuic | NodeProtocol::Juicity | NodeProtocol::ShadowQuic
+            NodeProtocol::Hysteria2
+                | NodeProtocol::Tuic
+                | NodeProtocol::Juicity
+                | NodeProtocol::ShadowQuic
         );
         strip!(self.tls_pin_sha256.is_some() && !tls, tls_pin_sha256);
         strip!(self.quic_mtu.is_some() && !quic, quic_mtu);
@@ -709,8 +755,14 @@ impl FlatNode {
                 username: flat.shadowquic_username.take(),
                 password: flat.shadowquic_password.take(),
                 server_name: flat.shadowquic_server_name.take(),
-                alpn: flat.shadowquic_alpn.take().unwrap_or_else(|| vec!["h3".into()]),
-                congestion: flat.shadowquic_congestion.take().unwrap_or_else(|| "bbr".into()),
+                alpn: flat
+                    .shadowquic_alpn
+                    .take()
+                    .unwrap_or_else(|| vec!["h3".into()]),
+                congestion: flat
+                    .shadowquic_congestion
+                    .take()
+                    .unwrap_or_else(|| "bbr".into()),
                 zero_rtt: flat.shadowquic_zero_rtt.unwrap_or(true),
                 over_stream: flat.shadowquic_over_stream.unwrap_or(false),
                 half_close_timeout: flat.shadowquic_half_close_timeout,

@@ -796,8 +796,14 @@ mod fallible_factory_tests {
 #[test]
 fn shadowquic_runtime_is_unavailable_until_handler_implementation() {
     let node = Node::from_share_link("shadowquic://u:p@h?sni=cover.example#node").unwrap();
-    assert!(matches!(NodeRuntime::try_ephemeral(&node), Err(RuntimeRegistryError::ShadowQuicUnavailable)));
-    assert!(matches!(OutboundRuntimeRegistry::build(&[node.clone()]), Err(RuntimeRegistryError::ShadowQuicUnavailable)));
+    assert!(matches!(
+        NodeRuntime::try_ephemeral(&node),
+        Err(RuntimeRegistryError::ShadowQuicUnavailable)
+    ));
+    assert!(matches!(
+        OutboundRuntimeRegistry::build(&[node.clone()]),
+        Err(RuntimeRegistryError::ShadowQuicUnavailable)
+    ));
     let registry = crate::proxy::ProxyRegistry::default_resolver().unwrap();
     assert!(registry.find(NodeProtocol::ShadowQuic).is_none());
     let facts = crate::descriptor::descriptor(NodeProtocol::ShadowQuic);

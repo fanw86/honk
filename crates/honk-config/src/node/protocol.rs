@@ -309,7 +309,11 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&config.quic.tls),
             Self::Juicity(config) => Some(&config.quic.tls),
             Self::AnyTls(config) => Some(&config.tls),
-            Self::Shadowsocks(_) | Self::Socks5(_) | Self::ShadowQuic(_) | Self::Direct | Self::Block => None,
+            Self::Shadowsocks(_)
+            | Self::Socks5(_)
+            | Self::ShadowQuic(_)
+            | Self::Direct
+            | Self::Block => None,
         }
     }
 
@@ -322,7 +326,11 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&mut config.quic.tls),
             Self::Juicity(config) => Some(&mut config.quic.tls),
             Self::AnyTls(config) => Some(&mut config.tls),
-            Self::Shadowsocks(_) | Self::Socks5(_) | Self::ShadowQuic(_) | Self::Direct | Self::Block => None,
+            Self::Shadowsocks(_)
+            | Self::Socks5(_)
+            | Self::ShadowQuic(_)
+            | Self::Direct
+            | Self::Block => None,
         }
     }
 
@@ -465,10 +473,16 @@ impl OutboundConfig {
         }
         if let Self::ShadowQuic(config) = self {
             fingerprint.push_str("|shadowquic:");
-            fingerprint.push_str(&serde_json::to_string(&(
-                &config.server_name, &config.alpn, &config.congestion,
-                config.zero_rtt, config.over_stream,
-            )).expect("ShadowQUIC dial options serialize"));
+            fingerprint.push_str(
+                &serde_json::to_string(&(
+                    &config.server_name,
+                    &config.alpn,
+                    &config.congestion,
+                    config.zero_rtt,
+                    config.over_stream,
+                ))
+                .expect("ShadowQUIC dial options serialize"),
+            );
         }
         fingerprint
     }
