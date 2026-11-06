@@ -39,3 +39,15 @@ does not establish UDP, 0-RTT, production routing, or honk runtime integration.
 Generated lockfiles are evidence, not yet committed dependency pins for this
 experimental crate. Record the run URL and observed results in the integration
 workspace's `plan.md` before implementing the production outbound.
+
+## Production-handler interoperability
+
+The optional `shadowquic` outbound is tested by `bash spike/run-handler-tests.sh`.
+It uses the same pinned server checkout, copies `reference-Cargo.lock` from
+Phase 0 run 42139824856 (SHA-256
+`0604c1ab71e76174056b850c94c5684f2e11d148b4f4f85a36e3e46de4a2602e`),
+and runs the actual handler's ignored TCP/UDP, lifecycle and core relay tests.
+Logs go to `spike/tmp/handler-logs/`. The manual configuration integration
+workflow accepts `shadowquic=true` to run these tests plus feature boundaries,
+lint and compilation. It preserves the resolved honk lockfile and formatting
+patch as artifacts. These tests do not exercise real eBPF gateway routing.

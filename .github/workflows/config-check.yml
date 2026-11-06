@@ -8,6 +8,10 @@ on:
         required: true
         default: main
         type: string
+      shadowquic:
+        description: Validate the optional JLS outbound against the reference server
+        type: boolean
+        default: false
       format_only:
         description: Only verify formatting after whitespace-only changes
         type: boolean
@@ -37,6 +41,11 @@ jobs:
         with:
           key: config-integration
           cache-on-failure: true
+      - name: Resolve optional dependency graph
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        run: |
+          cargo metadata --format-version 1 --features honk-core/shadowquic > "$RUNNER_TEMP/cargo-metadata.json"
+          cp Cargo.lock "$RUNNER_TEMP/resolved-Cargo.lock"
       - name: Format and preserve formatting patch
         run: |
           cargo fmt --all
@@ -76,14 +85,50 @@ jobs:
         run: |
           cargo test -p honk-outbound --locked
           cargo test -p honk-outbound --no-default-features --lib shadowquic_runtime --locked
+      - name: Optional JLS unit and lint checks
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        run: |
+          cargo test -p honk-outbound --features shadowquic --lib --locked
+          cargo clippy -p honk-outbound --all-targets --features shadowquic --locked -- -D warnings
+      - name: Confirm handler registration fails on the Phase 1 baseline
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        run: |
+          set -euo pipefail
+          baseline_dir="$RUNNER_TEMP/handler-baseline"
+          git worktree add --detach "$baseline_dir" 1586e79a2bfb0547dde3e0ebea5a96ef96cd3619
+          printf '\n#[test]\nfn shadowquic_handler_baseline_probe() { let node = Node::from_share_link("shadowquic://u:p@h?sni=cover.example").unwrap(); assert!(crate::proxy::ProxyRegistry::default_resolver().unwrap().find(node.protocol()).is_some()); }\n' >> "$baseline_dir/crates/honk-outbound/src/runtime/tests.rs"
+          set +e
+          CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" cargo test --manifest-path "$baseline_dir/Cargo.toml" -p honk-outbound --lib shadowquic_handler_baseline_probe --locked > "$RUNNER_TEMP/baseline-handler.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/baseline-handler.log"
+          test "$result" -ne 0
+          grep -q 'shadowquic_handler_baseline_probe .*FAILED' "$RUNNER_TEMP/baseline-handler.log"
       - name: Core subscription gate and compilation
         if: ${{ !inputs.format_only }}
         run: cargo test -p honk-core --lib --features native-api shadowquic_subscription --locked
+      - name: Optional core and relay checks
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        run: |
+          cargo test -p honk-core --lib --features native-api,shadowquic shadowquic_subscription --locked
+          cargo test -p honk-core --lib --features native-api,shadowquic relay:: --locked
+      - name: Check out pinned reference server
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spongebob888/shadowquic
+          ref: ef1c7eb788b087b7e0b3ac99ce9b72f8068f53b1
+          path: shadowquic
+          persist-credentials: false
+      - name: Real-server handler interoperability
+        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        timeout-minutes: 15
+        run: bash spike/run-handler-tests.sh
       - name: Check all workspace targets
         if: ${{ !inputs.format_only }}
-        run: cargo check --workspace --all-targets --features honk-core/native-api --locked
+        run: cargo check --workspace --all-targets --features "honk-core/native-api${{ inputs.shadowquic && ',honk-core/shadowquic' || '' }}" --locked
       - name: Check formatting
-        run: git diff --exit-code
+        run: git diff --exit-code -- . ":(exclude)Cargo.lock"
       - name: Upload formatting patch
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -92,4 +137,16 @@ jobs:
           path: |
             ${{ runner.temp }}/rustfmt.patch
             ${{ runner.temp }}/baseline.log
+            ${{ runner.temp }}/baseline-handler.log
+            ${{ runner.temp }}/resolved-Cargo.lock
+          retention-days: 14
+      - name: Upload JLS interoperability evidence
+        if: ${{ always() && inputs.shadowquic && !inputs.format_only }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: shadowquic-handler-evidence
+          path: |
+            spike/tmp/handler-logs/
+            shadowquic/Cargo.lock
+          if-no-files-found: warn
           retention-days: 14
