@@ -588,7 +588,9 @@ mod tests {
             })
             .await
             .unwrap();
-        assert!(conn.close_reason().is_some());
+        tokio::time::timeout(Duration::from_secs(5), conn.closed())
+            .await
+            .unwrap();
         tokio::time::timeout(Duration::from_secs(5), registry.shutdown())
             .await
             .unwrap();

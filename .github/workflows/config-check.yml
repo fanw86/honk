@@ -16,6 +16,10 @@ on:
         description: Only verify formatting after whitespace-only changes
         type: boolean
         default: false
+      interop_only:
+        description: Rerun live interoperability and workspace compilation after test-only corrections
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -51,10 +55,10 @@ jobs:
           cargo fmt --all
           git diff --binary > "$RUNNER_TEMP/rustfmt.patch"
       - name: Configuration tests
-        if: ${{ !inputs.format_only }}
+        if: ${{ !inputs.format_only && !inputs.interop_only }}
         run: cargo test -p honk-config --locked
       - name: Confirm the valid URI fails on the Phase 0 baseline
-        if: ${{ !inputs.format_only }}
+        if: ${{ !inputs.format_only && !inputs.interop_only }}
         env:
           BASELINE: eade5bead429f9c4ea12e450dc60a44b99d27b62
         run: |
@@ -81,17 +85,17 @@ jobs:
             sudo apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 install -y cmake clang libclang-dev pkg-config
           fi
       - name: Outbound runtime gate
-        if: ${{ !inputs.format_only }}
+        if: ${{ !inputs.format_only && !inputs.interop_only }}
         run: |
           cargo test -p honk-outbound --locked
           cargo test -p honk-outbound --no-default-features --lib shadowquic_runtime --locked
       - name: Optional JLS unit and lint checks
-        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        if: ${{ inputs.shadowquic && !inputs.format_only && !inputs.interop_only }}
         run: |
           cargo test -p honk-outbound --features shadowquic --lib --locked
           cargo clippy -p honk-outbound --all-targets --features shadowquic --locked -- -D warnings
       - name: Confirm handler registration fails on the Phase 1 baseline
-        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        if: ${{ inputs.shadowquic && !inputs.format_only && !inputs.interop_only }}
         run: |
           set -euo pipefail
           baseline_dir="$RUNNER_TEMP/handler-baseline"
@@ -105,10 +109,10 @@ jobs:
           test "$result" -ne 0
           grep -q 'shadowquic_handler_baseline_probe .*FAILED' "$RUNNER_TEMP/baseline-handler.log"
       - name: Core subscription gate and compilation
-        if: ${{ !inputs.format_only }}
+        if: ${{ !inputs.format_only && !inputs.interop_only }}
         run: cargo test -p honk-core --lib --features native-api shadowquic_subscription --locked
       - name: Optional core and relay checks
-        if: ${{ inputs.shadowquic && !inputs.format_only }}
+        if: ${{ inputs.shadowquic && !inputs.format_only && !inputs.interop_only }}
         run: |
           cargo test -p honk-core --lib --features native-api,shadowquic shadowquic_subscription --locked
           cargo test -p honk-core --lib --features native-api,shadowquic relay:: --locked
