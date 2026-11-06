@@ -47,7 +47,7 @@ jobs:
           source=crates/honk-core/src/stats.rs
           cp "$source" "$RUNNER_TEMP/stats.rs"
           trap 'cp "$RUNNER_TEMP/stats.rs" "$source"' EXIT
-          sed -i '/NodeProtocol::ShadowQuic => self.shadowquic_clients/d' "$source"
+          sed -i 's/self.shadowquic_clients += counts.clients.unwrap_or(0) as u64/()/g' "$source"
           set +e
           cargo test -p honk-core --lib --features native-api,shadowquic warm_snapshot_routes_shadowquic_client_slots --locked > "$RUNNER_TEMP/ablation.log" 2>&1
           result=$?
