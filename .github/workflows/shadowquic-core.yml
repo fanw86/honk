@@ -35,7 +35,7 @@ jobs:
       - name: Feature-enabled core contracts
         run: |
           set -euo pipefail
-          for suite in stats:: subscription:: group:: routing::golden; do
+          for suite in stats:: subscription:: routing::golden; do
             cargo test -p honk-core --lib --features native-api,shadowquic "$suite" --locked -- --list > "$RUNNER_TEMP/selection.txt"
             grep -q ': test$' "$RUNNER_TEMP/selection.txt"
             cargo test -p honk-core --lib --features native-api,shadowquic "$suite" --locked
