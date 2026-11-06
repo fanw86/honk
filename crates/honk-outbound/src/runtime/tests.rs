@@ -802,7 +802,7 @@ fn shadowquic_runtime_is_unavailable_until_handler_implementation() {
         Err(RuntimeRegistryError::ShadowQuicUnavailable)
     ));
     assert!(matches!(
-        OutboundRuntimeRegistry::build(&[node.clone()]),
+        OutboundRuntimeRegistry::build(std::slice::from_ref(&node)),
         Err(RuntimeRegistryError::ShadowQuicUnavailable)
     ));
     let registry = crate::proxy::ProxyRegistry::default_resolver().unwrap();
@@ -822,7 +822,7 @@ async fn shadowquic_preparation_cancelled_during_promotion_is_joined() {
         "shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#node"
     ))
     .unwrap();
-    let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+    let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
     let runtime = registry.get(&node.id).unwrap();
     let prepared = crate::proxy::shadowquic::ShadowQuicHandler::new()
         .prepare_shared_source(
@@ -859,4 +859,21 @@ fn shadowquic_runtime_is_available_with_feature() {
     let facts = crate::descriptor::descriptor(NodeProtocol::ShadowQuic);
     assert!((facts.supports_udp)(&node));
     assert!(!(facts.pool_bare_tcp)(&node));
+    assert!(facts.supports_warm(&node, crate::proxy::WarmRequirement::Session));
+    assert!(!facts.supports_warm(&node, crate::proxy::WarmRequirement::Udp));
+}
+
+#[cfg(feature = "shadowquic")]
+#[tokio::test]
+async fn shadowquic_udp_warm_refuses_before_constructing_a_client() {
+    use crate::proxy::{WarmRequirement, WarmableOutbound};
+    let node = Node::from_share_link("shadowquic://u:p@invalid.invalid?sni=cover.example#node").unwrap();
+    let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
+    let runtime = registry.get(&node.id).unwrap();
+    let result = crate::proxy::shadowquic::ShadowQuicHandler::new().warm(
+        Arc::clone(&runtime), Duration::from_secs(1), WarmRequirement::Udp,
+    ).await;
+    assert!(result.is_err());
+    assert_eq!(runtime.warm_counts().clients, Some(0));
+    registry.shutdown().await;
 }

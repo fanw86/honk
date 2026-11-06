@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use quinn_jls as quinn;
 
 const MAX_ENDPOINTS: usize = 64;
-const MAX_WORKERS: usize = 64;
+pub(super) const MAX_WORKERS: usize = 64;
 const IDLE_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub(super) struct Owner {

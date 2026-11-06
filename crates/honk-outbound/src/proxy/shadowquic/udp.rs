@@ -466,6 +466,58 @@ async fn dispatch(
 mod tests {
     use super::*;
 
+    async fn reference_session() -> (crate::runtime::OutboundRuntimeRegistry, Arc<crate::runtime::NodeRuntime>, Arc<Session>) {
+        let server = std::env::var("HONK_SHADOWQUIC_TEST_SERVER").unwrap();
+        let node = honk_config::node::Node::from_share_link(&format!("shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#test")).unwrap();
+        let registry = crate::runtime::OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
+        let runtime = registry.get(&node.id).unwrap();
+        let session = runtime.scope_tasks(async {
+            super::super::client::Client::new(&node)?.connect(Duration::from_secs(5)).await
+        }).await.unwrap();
+        (registry, runtime, session)
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    #[ignore = "requires the pinned reference server"]
+    async fn shadowquic_udp_construction_failure_aborts_started_workers() {
+        let (registry, runtime, session) = reference_session().await;
+        let owner = Arc::clone(&session.owner);
+        let conn = session.conn.clone();
+        runtime.scope_tasks(async {
+            for _ in 0..super::super::client::MAX_WORKERS - 1 { owner.spawn(std::future::pending())?; }
+            let result = Udp::new(session, "127.0.0.1:12345".parse().unwrap(), None, false).await;
+            assert!(result.is_err());
+            Ok(())
+        }).await.unwrap();
+        assert!(conn.close_reason().is_some());
+        tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires the pinned reference server"]
+    async fn shadowquic_udp_control_eof_closes_a_full_receive_queue() {
+        let (registry, runtime, session) = reference_session().await;
+        let echo = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        let target = echo.local_addr().unwrap();
+        let echo_task = tokio::spawn(async move {
+            let mut buffer = [0; 64];
+            while let Ok((length, peer)) = echo.recv_from(&mut buffer).await { let _ = echo.send_to(&buffer[..length], peer).await; }
+        });
+        let transport = runtime.scope_tasks(async { Udp::new(session, target, None, false).await }).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while transport.receiver.lock().await.len() < QUEUE {
+                transport.send_packet(b"queued").await.unwrap();
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        }).await.unwrap();
+        transport.sender.lock().await.control.finish().unwrap();
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while transport.session.conn.close_reason().is_none() { tokio::time::sleep(Duration::from_millis(5)).await; }
+        }).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
+        echo_task.abort(); let _ = echo_task.await;
+    }
+
     #[tokio::test]
     async fn cancelled_frame_poisons_the_association() {
         let (mut writer, _reader) = tokio::io::duplex(1);

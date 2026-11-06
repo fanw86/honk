@@ -100,8 +100,8 @@ fn trojan_pool_ready_streams(node: &Node) -> bool {
 fn shadowquic_enabled(_: &Node) -> bool {
     cfg!(feature = "shadowquic")
 }
-fn shadowquic_warm(_: &Node, _: WarmRequirement) -> bool {
-    cfg!(feature = "shadowquic")
+fn shadowquic_warm(_: &Node, requirement: WarmRequirement) -> bool {
+    cfg!(feature = "shadowquic") && matches!(requirement, WarmRequirement::Session)
 }
 
 static DESCRIPTORS: &[ProtocolDescriptor] = &[

@@ -253,18 +253,11 @@ impl WarmableOutbound for ShadowQuicHandler {
         requirement: WarmRequirement,
     ) -> Result<()> {
         let operation = async {
-            let client = self.client(&runtime).await?;
-            let lease = client.tcp(timeout).await?;
-            if matches!(requirement, WarmRequirement::Udp)
-                && !runtime
-                    .node
-                    .shadowquic()
-                    .expect("ShadowQUIC runtime")
-                    .over_stream
-                && lease.0.conn.max_datagram_size().is_none()
-            {
-                anyhow::bail!("ShadowQUIC peer did not negotiate datagrams");
+            if matches!(requirement, WarmRequirement::Udp) {
+                anyhow::bail!("ShadowQUIC UDP associations do not share reusable warm sessions");
             }
+            let client = self.client(&runtime).await?;
+            let _lease = client.tcp(timeout).await?;
             Ok(())
         };
         runtime

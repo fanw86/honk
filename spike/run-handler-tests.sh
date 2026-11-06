@@ -32,6 +32,8 @@ cargo test -p honk-outbound --features shadowquic --test shadowquic --locked -- 
 test "$(grep -c ': test$' "$log/interop-list.txt")" -eq 8
 cargo test -p honk-outbound --features shadowquic --lib shadowquic_preparation_cancelled_during_promotion_is_joined --locked -- --ignored --list > "$log/promotion-list.txt"
 grep -q 'shadowquic_preparation_cancelled_during_promotion_is_joined: test' "$log/promotion-list.txt"
+cargo test -p honk-outbound --features shadowquic --lib shadowquic_udp_ --locked -- --ignored --list > "$log/udp-lifecycle-list.txt"
+test "$(grep -c ': test$' "$log/udp-lifecycle-list.txt")" -eq 2
 cargo test -p honk-core --features native-api,shadowquic --lib shadowquic_relay --locked -- --ignored --list > "$log/relay-list.txt"
 grep -q 'shadowquic_relay_bounds_remote_fin_with_silent_client: test' "$log/relay-list.txt"
 env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
@@ -40,6 +42,9 @@ env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
 env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
     cargo test -p honk-outbound --features shadowquic --lib shadowquic_preparation_cancelled_during_promotion_is_joined --locked -- --ignored \
     2>&1 | tee "$log/promotion-cancellation.log"
+env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
+    cargo test -p honk-outbound --features shadowquic --lib shadowquic_udp_ --locked -- --ignored --test-threads=1 \
+    2>&1 | tee "$log/udp-lifecycle.log"
 env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY \
     cargo test -p honk-core --features native-api,shadowquic --lib shadowquic_relay --locked -- --ignored \
     2>&1 | tee "$log/relay-half-close.log"

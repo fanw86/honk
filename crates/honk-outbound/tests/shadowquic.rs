@@ -81,7 +81,7 @@ async fn packet_echo(transport: &dyn PacketTransport, payload: &[u8], peer: Sock
 #[ignore = "requires the pinned reference server"]
 async fn authenticated_tcp_concurrency_domain_and_ipv6() {
     let node = node(false);
-    let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+    let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
     let runtime = registry.get(&node.id).unwrap();
     let echo = tcp_echo("127.0.0.1").await;
     let mut jobs = tokio::task::JoinSet::new();
@@ -254,7 +254,7 @@ async fn speculative_udp_warm_release_and_generation_shutdown() {
     let handler = ShadowQuicHandler::new();
     for over_stream in [false, true] {
         let node = node(over_stream);
-        let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+        let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
         let runtime = registry.get(&node.id).unwrap();
         let (left, right) = tokio::join!(
             handler.prepare_shared_source(Arc::clone(&runtime), echo.address, None, DEADLINE, true),
@@ -330,7 +330,7 @@ async fn abandoned_speculation_and_cancelled_handshake_are_joined() {
     let echo = udp_echo("127.0.0.1").await;
     let handler = ShadowQuicHandler::new();
     let node = node(false);
-    let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+    let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
     let runtime = registry.get(&node.id).unwrap();
     let pending = handler
         .prepare_shared_source(Arc::clone(&runtime), echo.address, None, DEADLINE, true)
@@ -341,7 +341,7 @@ async fn abandoned_speculation_and_cancelled_handshake_are_joined() {
     let mut bad = node.clone();
     bad.shadowquic_mut().unwrap().password = Some("wrong".into());
     bad.id = bad.derive_id();
-    let bad_registry = OutboundRuntimeRegistry::build(&[bad.clone()]).unwrap();
+    let bad_registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&bad)).unwrap();
     let bad_runtime = bad_registry.get(&bad.id).unwrap();
     assert!(
         tokio::time::timeout(
@@ -370,7 +370,7 @@ async fn context_exhaustion_is_local_and_existing_destinations_survive() {
             servers.push(udp_echo("127.0.0.1").await);
         }
         let node = node(over_stream);
-        let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+        let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
         let source = handler
             .prepare_shared_source(
                 registry.get(&node.id).unwrap(),
@@ -416,7 +416,7 @@ async fn context_exhaustion_is_local_and_existing_destinations_survive() {
 async fn endpoint_capacity_is_bounded_and_released_after_drop() {
     let handler = ShadowQuicHandler::new();
     let node = node(false);
-    let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+    let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
     let runtime = registry.get(&node.id).unwrap();
     let target = "127.0.0.1:12345".parse().unwrap();
     let mut associations = Vec::new();
