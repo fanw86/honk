@@ -257,7 +257,7 @@ async fn speculative_udp_warm_release_and_generation_shutdown() {
         let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
         let runtime = registry.get(&node.id).unwrap();
         let (left, right) = tokio::join!(
-            handler.prepare_shared_source(Arc::clone(&runtime), echo.address, None, DEADLINE, true),
+            handler.prepare_shared_source(Arc::clone(&runtime), echo.address, Some("localhost"), DEADLINE, true),
             handler.prepare_shared_source(
                 Arc::clone(&runtime),
                 other.address,
@@ -277,7 +277,7 @@ async fn speculative_udp_warm_release_and_generation_shutdown() {
         assert_eq!(runtime.warm_counts().clients, Some(1));
         packet_echo(left.as_ref(), b"left", echo.address).await;
         packet_echo(right.as_ref(), b"right", other.address).await;
-        left.send_to(other.address, None, b"second-target", true, None)
+        left.send_to(other.address, Some("localhost"), b"second-target", true, None)
             .await
             .unwrap();
         let mut buffer = [0; 64];
@@ -287,6 +287,10 @@ async fn speculative_udp_warm_release_and_generation_shutdown() {
             .unwrap();
         assert_eq!(&buffer[..length], b"second-target");
         assert_eq!(peer, other.address);
+        left.send_to(echo.address, Some("unresolved.invalid"), b"other-name", true, None).await.unwrap();
+        let (length, peer) = tokio::time::timeout(DEADLINE, left.recv_packet(&mut buffer)).await.unwrap().unwrap();
+        assert_eq!(&buffer[..length], b"other-name");
+        assert_eq!(peer, echo.address);
         let echo_tcp = tcp_echo("127.0.0.1").await;
         let mut active_tcp = handler
             .dial_runtime(Arc::clone(&runtime), echo_tcp.address, None, DEADLINE)

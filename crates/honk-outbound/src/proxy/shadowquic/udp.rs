@@ -82,8 +82,9 @@ impl Udp {
             dispatch(connection, incoming, output).await;
         })?;
         let control_events = events.clone();
+        let captured_domain = domain.map(str::to_string);
         session.owner.spawn(async move {
-            let _ = read_control(recv, &control_events).await;
+            let _ = read_control(recv, &control_events, captured_domain.as_deref(), target).await;
             let _ = control_events.send(Event::Closed).await;
         })?;
         let connection = session.conn.clone();
@@ -181,7 +182,7 @@ impl Udp {
         {
             return Err(PacketRejection::InvalidSize.into());
         }
-        let address = SocksAddr::new(target, domain)?;
+        let address = wire_address(target, domain, self.target, self.domain.as_deref())?;
         let mut sender = self.sender.lock().await;
         self.poison.check()?;
         let index = match sender
@@ -324,14 +325,16 @@ async fn write_frame<W: tokio::io::AsyncWrite + Unpin>(
 }
 
 async fn read_control(
-    mut recv: quinn_jls::RecvStream,
+    mut recv: impl AsyncReadExt + Unpin,
     events: &mpsc::Sender<Event>,
+    domain: Option<&str>,
+    target: SocketAddr,
 ) -> io::Result<()> {
     loop {
         let peer = super::super::addr::read_reply_source(
             &mut recv,
-            None,
-            "0.0.0.0:0".parse().expect("literal socket"),
+            domain,
+            target,
         )
         .await?;
         let id = recv.read_u16().await?;
@@ -339,6 +342,19 @@ async fn read_control(
             return Ok(());
         }
     }
+}
+
+fn wire_address(
+    target: SocketAddr,
+    domain: Option<&str>,
+    captured_target: SocketAddr,
+    captured_domain: Option<&str>,
+) -> io::Result<SocksAddr> {
+    let domain = domain.filter(|name| {
+        target == captured_target
+            && captured_domain.is_some_and(|captured| captured.eq_ignore_ascii_case(name))
+    });
+    SocksAddr::new(target, domain)
 }
 
 async fn read_stream(
@@ -466,14 +482,50 @@ async fn dispatch(
 mod tests {
     use super::*;
 
-    async fn reference_session() -> (crate::runtime::OutboundRuntimeRegistry, Arc<crate::runtime::NodeRuntime>, Arc<Session>) {
+    #[tokio::test]
+    async fn captured_domain_projection_preserves_reply_identity() {
+        let target: SocketAddr = "127.0.0.1:1234".parse().unwrap();
+        let other: SocketAddr = "127.0.0.2:1234".parse().unwrap();
+        assert_eq!(wire_address(target, Some("LOCALHOST"), target, Some("localhost")).unwrap(), SocksAddr::Domain("LOCALHOST".into(), 1234));
+        for (peer, name) in [(other, "localhost"), (target, "other.test"), ("127.0.0.1:4321".parse().unwrap(), "localhost")] {
+            assert_eq!(wire_address(peer, Some(name), target, Some("localhost")).unwrap(), SocksAddr::new(peer, None).unwrap());
+        }
+        let mut input = Vec::new();
+        for (id, address) in [SocksAddr::Domain("LOCALHOST".into(), 1234), SocksAddr::Domain("other.test".into(), 1234), SocksAddr::Domain("localhost".into(), 4321), SocksAddr::new(other, None).unwrap()].into_iter().enumerate() {
+            address.encode(&mut input);
+            input.extend_from_slice(&(id as u16).to_be_bytes());
+        }
+        let (events, mut receiver) = mpsc::channel(QUEUE);
+        assert!(read_control(input.as_slice(), &events, Some("localhost"), target).await.is_err());
+        for (id, expected) in [Some(target), None, None, Some(other)].into_iter().enumerate() {
+            match receiver.recv().await.unwrap() {
+                Event::Control(actual, peer) => { assert_eq!(actual, id as u16); assert_eq!(peer, expected); }
+                _ => panic!("expected control metadata"),
+            }
+        }
+    }
+
+    async fn reference_session() -> (
+        crate::runtime::OutboundRuntimeRegistry,
+        Arc<crate::runtime::NodeRuntime>,
+        Arc<Session>,
+    ) {
         let server = std::env::var("HONK_SHADOWQUIC_TEST_SERVER").unwrap();
-        let node = honk_config::node::Node::from_share_link(&format!("shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#test")).unwrap();
-        let registry = crate::runtime::OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
+        let node = honk_config::node::Node::from_share_link(&format!(
+            "shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#test"
+        ))
+        .unwrap();
+        let registry =
+            crate::runtime::OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
         let runtime = registry.get(&node.id).unwrap();
-        let session = runtime.scope_tasks(async {
-            super::super::client::Client::new(&node)?.connect(Duration::from_secs(5)).await
-        }).await.unwrap();
+        let session = runtime
+            .scope_tasks(async {
+                super::super::client::Client::new(&node)?
+                    .connect(Duration::from_secs(5))
+                    .await
+            })
+            .await
+            .unwrap();
         (registry, runtime, session)
     }
 
@@ -483,14 +535,22 @@ mod tests {
         let (registry, runtime, session) = reference_session().await;
         let owner = Arc::clone(&session.owner);
         let conn = session.conn.clone();
-        runtime.scope_tasks(async {
-            for _ in 0..super::super::client::MAX_WORKERS - 1 { owner.spawn(std::future::pending())?; }
-            let result = Udp::new(session, "127.0.0.1:12345".parse().unwrap(), None, false).await;
-            assert!(result.is_err());
-            Ok(())
-        }).await.unwrap();
+        runtime
+            .scope_tasks(async {
+                for _ in 0..super::super::client::MAX_WORKERS - 1 {
+                    owner.spawn(std::future::pending())?;
+                }
+                let result =
+                    Udp::new(session, "127.0.0.1:12345".parse().unwrap(), None, false).await;
+                assert!(result.is_err());
+                Ok(())
+            })
+            .await
+            .unwrap();
         assert!(conn.close_reason().is_some());
-        tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
+        tokio::time::timeout(Duration::from_secs(5), registry.shutdown())
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -501,21 +561,35 @@ mod tests {
         let target = echo.local_addr().unwrap();
         let echo_task = tokio::spawn(async move {
             let mut buffer = [0; 64];
-            while let Ok((length, peer)) = echo.recv_from(&mut buffer).await { let _ = echo.send_to(&buffer[..length], peer).await; }
+            while let Ok((length, peer)) = echo.recv_from(&mut buffer).await {
+                let _ = echo.send_to(&buffer[..length], peer).await;
+            }
         });
-        let transport = runtime.scope_tasks(async { Udp::new(session, target, None, false).await }).await.unwrap();
+        let transport = runtime
+            .scope_tasks(async { Udp::new(session, target, None, false).await })
+            .await
+            .unwrap();
         tokio::time::timeout(Duration::from_secs(5), async {
             while transport.receiver.lock().await.len() < QUEUE {
                 transport.send_packet(b"queued").await.unwrap();
                 tokio::time::sleep(Duration::from_millis(5)).await;
             }
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         transport.sender.lock().await.control.finish().unwrap();
         tokio::time::timeout(Duration::from_secs(5), async {
-            while transport.session.conn.close_reason().is_none() { tokio::time::sleep(Duration::from_millis(5)).await; }
-        }).await.unwrap();
-        tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
-        echo_task.abort(); let _ = echo_task.await;
+            while transport.session.conn.close_reason().is_none() {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(5), registry.shutdown())
+            .await
+            .unwrap();
+        echo_task.abort();
+        let _ = echo_task.await;
     }
 
     #[tokio::test]

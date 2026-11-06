@@ -867,12 +867,17 @@ fn shadowquic_runtime_is_available_with_feature() {
 #[tokio::test]
 async fn shadowquic_udp_warm_refuses_before_constructing_a_client() {
     use crate::proxy::{WarmRequirement, WarmableOutbound};
-    let node = Node::from_share_link("shadowquic://u:p@invalid.invalid?sni=cover.example#node").unwrap();
+    let node =
+        Node::from_share_link("shadowquic://u:p@invalid.invalid?sni=cover.example#node").unwrap();
     let registry = OutboundRuntimeRegistry::build(std::slice::from_ref(&node)).unwrap();
     let runtime = registry.get(&node.id).unwrap();
-    let result = crate::proxy::shadowquic::ShadowQuicHandler::new().warm(
-        Arc::clone(&runtime), Duration::from_secs(1), WarmRequirement::Udp,
-    ).await;
+    let result = crate::proxy::shadowquic::ShadowQuicHandler::new()
+        .warm(
+            Arc::clone(&runtime),
+            Duration::from_secs(1),
+            WarmRequirement::Udp,
+        )
+        .await;
     assert!(result.is_err());
     assert_eq!(runtime.warm_counts().clients, Some(0));
     registry.shutdown().await;
