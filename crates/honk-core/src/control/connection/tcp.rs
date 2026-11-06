@@ -856,8 +856,9 @@ impl ControlPlaneHandle {
                         tokio::select! {
                             biased;
                             _ = wait_for_close(close.as_ref()) => None,
-                            result = relay::relay_proxy(
+                            result = relay::relay_proxy_with_half_close(
                                 flow.stream_mut(), proxy_stream, client_addr, original_dst, conn_progress,
+                                node.shadowquic().map(|config| std::time::Duration::from_millis(config.half_close_timeout.unwrap_or(60_000))),
                             ) => Some(result),
                         }
                     };

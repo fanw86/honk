@@ -793,6 +793,7 @@ mod fallible_factory_tests {
     }
 }
 
+#[cfg(not(feature = "shadowquic"))]
 #[test]
 fn shadowquic_runtime_is_unavailable_until_handler_implementation() {
     let node = Node::from_share_link("shadowquic://u:p@h?sni=cover.example#node").unwrap();
@@ -808,5 +809,40 @@ fn shadowquic_runtime_is_unavailable_until_handler_implementation() {
     assert!(registry.find(NodeProtocol::ShadowQuic).is_none());
     let facts = crate::descriptor::descriptor(NodeProtocol::ShadowQuic);
     assert!(!(facts.supports_udp)(&node));
+    assert!(!(facts.pool_bare_tcp)(&node));
+}
+
+#[cfg(feature = "shadowquic")]
+#[tokio::test]
+#[ignore = "requires the pinned reference server"]
+async fn shadowquic_preparation_cancelled_during_promotion_is_joined() {
+    use crate::proxy::SharedSourceOutbound;
+    let server = std::env::var("HONK_SHADOWQUIC_TEST_SERVER").unwrap();
+    let node = Node::from_share_link(&format!("shadowquic://spike-user:spike-pass@{server}?sni=shadowquic.test#node")).unwrap();
+    let registry = OutboundRuntimeRegistry::build(&[node.clone()]).unwrap();
+    let runtime = registry.get(&node.id).unwrap();
+    let prepared = crate::proxy::shadowquic::ShadowQuicHandler::new().prepare_shared_source(
+        Arc::clone(&runtime), "127.0.0.1:12345".parse().unwrap(), None, Duration::from_secs(5), true,
+    ).await.unwrap();
+    let ProtocolRuntime::Quic(quic) = &runtime.runtime else { panic!("expected QUIC runtime") };
+    let held = quic.state.lock().await;
+    let promotion = tokio::spawn(prepared.commit());
+    tokio::task::yield_now().await;
+    promotion.abort();
+    assert!(promotion.await.unwrap_err().is_cancelled());
+    drop(held);
+    assert_eq!(runtime.warm_counts().clients, Some(0));
+    tokio::time::timeout(Duration::from_secs(5), registry.shutdown()).await.unwrap();
+}
+
+#[cfg(feature = "shadowquic")]
+#[test]
+fn shadowquic_runtime_is_available_with_feature() {
+    let node = Node::from_share_link("shadowquic://u:p@h?sni=cover.example#node").unwrap();
+    assert!(NodeRuntime::try_ephemeral(&node).is_ok());
+    let registry = crate::proxy::ProxyRegistry::default_resolver().unwrap();
+    assert!(registry.find(NodeProtocol::ShadowQuic).is_some());
+    let facts = crate::descriptor::descriptor(NodeProtocol::ShadowQuic);
+    assert!((facts.supports_udp)(&node));
     assert!(!(facts.pool_bare_tcp)(&node));
 }

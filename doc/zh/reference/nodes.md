@@ -677,9 +677,10 @@ REALITY 不使用 CA 校验或 `skip_cert_verify`。目标 TLS 记录的缓冲�
 - [订阅参考](./subscription.md)
 - [组参考](./groups.md)
 - [出站设计](../design/outbound.md)
+
 ## 实验性 ShadowQUIC 配置
 
-集成分支可解析提议的 `shadowquic://` 配置链接。该格式处于实验阶段，不保证上游互通。**出站处理器尚未实现**：运行时拒绝此类节点，订阅会丢弃它们并报告不支持的条目。
+集成分支通过 honk-core 的可选 Cargo 特性 `shadowquic` 支持提议的 `shadowquic://` 链接，需与正常部署特性一同启用。链接格式仍属实验性，兼容性针对固定版本的参考服务器测试。未启用该特性的构建会拒绝运行时接纳并丢弃此类订阅条目。已支持简单 URI 订阅；结构化 Clash/sing-box 导入和 doona 编辑将单独实现。
 
 ```dae
 node {
@@ -689,8 +690,10 @@ node {
 
 必须提供用户名、密码及 `sni`（别名 `peer`）。凭据中的保留字符需百分号编码。认证由 JLS 提供；普通 TLS、REALITY、证书校验和流传输选项均被拒绝。
 
-可选参数包括：`alpn`（逗号分隔，默认 `h3`）、`congestion`（`bbr`、`cubic`、`new_reno`，默认 `bbr`）、`zero-rtt`（默认 `true`）、`over-stream`（默认 `false`）、`mtu`（1200–65527）以及 `half-close-timeout`（非负毫秒数，省略时运行时默认 60000）。布尔值接受 `0`/`1` 或 `false`/`true`。重复参数及服务器名称别名必须一致；未知选项直接报错。
+可选参数包括：`alpn`（逗号分隔，默认 `h3`）、`congestion`（`bbr`、`cubic`、`new_reno`，默认 `bbr`）、`zero-rtt`（默认 `true`）、`over-stream`（默认 `false`）、`mtu`（1200–65527）以及 `half-close-timeout`（非负毫秒数，核心转发器默认 60000，零表示禁用半关闭后的空闲超时）。处理器始终在发送应用数据前验证完整 JLS 握手；`zero-rtt` 目前不会启用应用数据重放。布尔值接受 `0`/`1` 或 `false`/`true`。重复参数及服务器名称别名必须一致；未知选项直接报错。
 
 内部扁平记录使用 `shadowquic_username`、`shadowquic_password`、`shadowquic_server_name`、`shadowquic_alpn`（数组）、`shadowquic_congestion`、`shadowquic_zero_rtt`、`shadowquic_over_stream`、`shadowquic_half_close_timeout` 及 `quic_mtu`。通用 `username`/`password` 和 `sni`/`server_name` 别名必须与专用字段一致。其他协议不可使用 ShadowQUIC 字段。
 
 节点身份包含凭据、JLS 服务器名称、ALPN 顺序、拥塞控制及生效的零 RTT 和流模式。省略选项与显式默认值使用相同 ID；MTU、半关闭超时和显示名称不影响 ID。现有协议身份保持不变。
+
+TCP 流共享缓存连接。每个 UDP 关联使用独立的认证连接，最多支持 256 个数据报目标或 16 个流模式目标。数据报负载必须适合协商后的 QUIC 大小；流模式负载限制为 65507 字节。容量或大小拒绝不会破坏已有目标。每个客户端实例最多接纳 64 个活动或握手中的端点。独立 JLS 栈不使用 BoringSSL QUIC 栈的路径遥测或 ACK 看门狗。

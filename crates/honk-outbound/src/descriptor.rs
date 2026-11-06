@@ -97,6 +97,9 @@ fn trojan_pool_ready_streams(node: &Node) -> bool {
     matches!(node.transport().unwrap().transport.as_str(), "" | "tcp")
 }
 
+fn shadowquic_enabled(_: &Node) -> bool { cfg!(feature = "shadowquic") }
+fn shadowquic_warm(_: &Node, _: WarmRequirement) -> bool { cfg!(feature = "shadowquic") }
+
 static DESCRIPTORS: &[ProtocolDescriptor] = &[
     ProtocolDescriptor {
         protocol: NodeProtocol::SS,
@@ -179,11 +182,11 @@ static DESCRIPTORS: &[ProtocolDescriptor] = &[
     },
     ProtocolDescriptor {
         protocol: NodeProtocol::ShadowQuic,
-        supports_udp: never,
+        supports_udp: shadowquic_enabled,
         pool_ready_streams: never,
         pool_bare_tcp: never,
-        supports_warm: no_warm,
-        generation_runtime: GenerationRuntime::None,
+        supports_warm: shadowquic_warm,
+        generation_runtime: if cfg!(feature = "shadowquic") { GenerationRuntime::Quic } else { GenerationRuntime::None },
         share_link_schemes: &["shadowquic"],
     },
     // Multiplexed: the node-owned session pool already keeps reusable

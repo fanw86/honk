@@ -16,6 +16,7 @@
 //! ```
 
 pub mod splice;
+mod half_close;
 #[cfg(feature = "rprx")]
 mod vision;
 
@@ -69,6 +70,25 @@ pub async fn relay_proxy(
         Some(progress),
     )
     .await
+}
+
+/// Protocol-specific inactivity after EOF, supervised even while a shutdown is pending.
+pub async fn relay_proxy_with_half_close(
+    client: &mut TcpStream,
+    proxy: honk_outbound::ProxyStream,
+    client_addr: SocketAddr,
+    target_addr: SocketAddr,
+    progress: RelayProgress,
+    half_close: Option<std::time::Duration>,
+) -> anyhow::Result<RelayStats> {
+    let Some(timeout) = half_close else {
+        return relay_proxy(client, proxy, client_addr, target_addr, progress).await;
+    };
+    let start = tokio::time::Instant::now();
+    let (mut client, mut proxy) = relay_io_pair(client, proxy.stream, &progress);
+    let result = half_close::copy(&mut client, &mut proxy, timeout).await;
+    // The copy supervisor bounds shutdown too; do not await shutdown again after timeout.
+    relay_outcome(result, start, client_addr, target_addr)
 }
 
 /// Check whether a connection error is ignorable (normal connection closure).

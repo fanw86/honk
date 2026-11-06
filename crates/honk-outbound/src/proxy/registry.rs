@@ -194,6 +194,13 @@ impl ProxyRegistry {
                 .with_warmable(juicity.clone())
                 .with_probeable(juicity),
         );
+        #[cfg(feature = "shadowquic")]
+        {
+            let handler = Arc::new(super::shadowquic::ShadowQuicHandler::new());
+            registry.register(ProtocolEntry::new(NodeProtocol::ShadowQuic, handler.clone())
+                .with_packet(handler.clone()).with_shared(handler.clone())
+                .with_warmable(handler.clone()).with_probeable(handler));
+        }
         for entry in &registry.entries {
             entry.validate_consistency();
         }

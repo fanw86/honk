@@ -17,6 +17,8 @@ mod pooled;
 mod tasks;
 pub use tasks::TaskOwner;
 pub use tasks::TaskScope;
+#[cfg(feature = "shadowquic")]
+pub(crate) use tasks::new_owned_jls_endpoint;
 pub(crate) use tasks::{
     RuntimeEndpoint, SharedTask, new_owned_quic_endpoint, spawn_joinable, spawn_owned,
 };
@@ -428,6 +430,7 @@ impl NodeRuntime {
 
     /// Validate a node before any one-shot runtime state is cloned or built.
     pub(crate) fn validate_for_ephemeral(node: &Node) -> Result<(), RuntimeRegistryError> {
+        #[cfg(not(feature = "shadowquic"))]
         if node.shadowquic().is_some() {
             return Err(RuntimeRegistryError::ShadowQuicUnavailable);
         }
@@ -733,7 +736,7 @@ fn same_node_config(a: &Node, b: &Node) -> bool {
 pub enum RuntimeRegistryError {
     #[error("registry node admission failed")]
     Admission(#[source] honk_config::error::DetailedConfigError),
-    #[error("ShadowQUIC runtime support is not implemented in this build")]
+    #[error("ShadowQUIC support is not enabled in this build")]
     ShadowQuicUnavailable,
     #[error("node TLS configuration rejected")]
     Tls(#[source] Option<std::io::Error>),
@@ -909,6 +912,7 @@ impl OutboundRuntimeRegistry {
     ) -> Result<(Self, HashSet<uuid::Uuid>), RuntimeRegistryError> {
         honk_config::node::validate_node_collection(nodes)
             .map_err(RuntimeRegistryError::Admission)?;
+        #[cfg(not(feature = "shadowquic"))]
         if nodes.iter().any(|node| node.shadowquic().is_some()) {
             return Err(RuntimeRegistryError::ShadowQuicUnavailable);
         }
@@ -955,7 +959,7 @@ impl OutboundRuntimeRegistry {
                     node,
                     false,
                     #[cfg(feature = "owned-tasks")]
-                    own_tasks.then(|| Arc::new(tasks::TaskOwner::production())),
+                    (own_tasks || (cfg!(feature = "shadowquic") && node.shadowquic().is_some())).then(|| Arc::new(tasks::TaskOwner::production())),
                     #[cfg(any(feature = "rprx", test))]
                     Arc::clone(&vless_carrier_semaphore),
                 ),

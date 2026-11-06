@@ -9,6 +9,8 @@ pub mod direct;
 pub mod hysteria2;
 pub mod juicity;
 pub mod shadowsocks;
+#[cfg(feature = "shadowquic")]
+pub mod shadowquic;
 pub mod socks5;
 pub(crate) mod transport;
 pub mod trojan;

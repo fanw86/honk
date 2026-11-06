@@ -124,6 +124,7 @@ native-ui = ["native-api", "dep:brotli", "dep:flate2"]
 jemalloc = ["dep:tikv-jemallocator"]
 # VLESS / VMess proxy handlers (xtls-rprx-vision flow support)
 rprx = ["honk-outbound/rprx"]
+shadowquic = ["honk-outbound/shadowquic"]
 dns-bench = []
 udp-bench = []
 reload-bench = []

@@ -7,6 +7,9 @@ pub(crate) struct SharedTask {
 }
 
 impl SharedTask {
+    #[cfg(feature = "shadowquic")]
+    pub(crate) fn is_finished(&self) -> bool { self.abort.is_finished() }
+
     pub(crate) fn abort(&self) {
         self.abort.abort();
     }
@@ -170,14 +173,14 @@ impl TaskScope {
 }
 
 #[derive(Clone)]
-pub(crate) struct RuntimeEndpoint {
-    endpoint: quinn::Endpoint,
+pub(crate) struct RuntimeEndpoint<E = quinn::Endpoint> {
+    endpoint: E,
     #[cfg(feature = "owned-tasks")]
     _lease: Option<std::sync::Arc<()>>,
 }
 
-impl std::ops::Deref for RuntimeEndpoint {
-    type Target = quinn::Endpoint;
+impl<E> std::ops::Deref for RuntimeEndpoint<E> {
+    type Target = E;
 
     fn deref(&self) -> &Self::Target {
         &self.endpoint
@@ -187,6 +190,45 @@ impl std::ops::Deref for RuntimeEndpoint {
 pub(crate) fn new_owned_quic_endpoint(
     build: impl FnOnce() -> std::io::Result<quinn::Endpoint>,
 ) -> std::io::Result<RuntimeEndpoint> {
+    new_owned_endpoint(build, OwnedEndpoint::Quinn)
+}
+
+#[cfg(feature = "shadowquic")]
+pub(crate) fn new_owned_jls_endpoint(
+    build: impl FnOnce() -> std::io::Result<quinn_jls::Endpoint>,
+) -> std::io::Result<RuntimeEndpoint<quinn_jls::Endpoint>> {
+    if capture_owner().is_none() { return Err(std::io::ErrorKind::Interrupted.into()); }
+    new_owned_endpoint(build, OwnedEndpoint::Jls)
+}
+
+#[derive(Clone, Debug)]
+enum OwnedEndpoint {
+    Quinn(quinn::Endpoint),
+    #[cfg(feature = "shadowquic")]
+    Jls(quinn_jls::Endpoint),
+}
+
+impl OwnedEndpoint {
+    fn close(&self) {
+        match self {
+            Self::Quinn(endpoint) => endpoint.close(0u32.into(), b"outbound runtime closed"),
+            #[cfg(feature = "shadowquic")]
+            Self::Jls(endpoint) => endpoint.close(0u32.into(), b"outbound runtime closed"),
+        }
+    }
+    async fn wait_idle(&self) {
+        match self {
+            Self::Quinn(endpoint) => endpoint.wait_idle().await,
+            #[cfg(feature = "shadowquic")]
+            Self::Jls(endpoint) => endpoint.wait_idle().await,
+        }
+    }
+}
+
+fn new_owned_endpoint<E: Clone>(
+    build: impl FnOnce() -> std::io::Result<E>,
+    _erase: impl FnOnce(E) -> OwnedEndpoint,
+) -> std::io::Result<RuntimeEndpoint<E>> {
     #[cfg(feature = "owned-tasks")]
     if let Some(owner) = capture_owner() {
         let owner = owner
@@ -210,7 +252,7 @@ pub(crate) fn new_owned_quic_endpoint(
         let lease = std::sync::Arc::new(());
         state
             .endpoints
-            .push((std::sync::Arc::downgrade(&lease), endpoint.clone()));
+            .push((std::sync::Arc::downgrade(&lease), _erase(endpoint.clone())));
         return Ok(RuntimeEndpoint {
             endpoint,
             _lease: Some(lease),
@@ -249,7 +291,7 @@ struct OwnedTasks {
     closed: bool,
     capacity_rejected: bool,
     tasks: Vec<TaskEntry>,
-    endpoints: Vec<(std::sync::Weak<()>, quinn::Endpoint)>,
+    endpoints: Vec<(std::sync::Weak<()>, OwnedEndpoint)>,
 }
 
 #[derive(Debug)]
@@ -463,7 +505,7 @@ impl TaskOwner {
             task.abort();
         }
         for (_, endpoint) in &state.endpoints {
-            endpoint.close(quinn::VarInt::from_u32(0), b"outbound runtime closed");
+            endpoint.close();
         }
         self.closed.notify_waiters();
     }
@@ -535,7 +577,7 @@ impl Drop for PendingJoin<'_> {
 
 struct PendingEndpoint<'a> {
     owner: &'a TaskOwner,
-    endpoint: Option<(std::sync::Weak<()>, quinn::Endpoint)>,
+    endpoint: Option<(std::sync::Weak<()>, OwnedEndpoint)>,
 }
 
 impl Drop for PendingEndpoint<'_> {
@@ -825,5 +867,13 @@ mod tests {
         );
         local.close().await;
         assert!(!ran.load(Ordering::Acquire));
+    }
+}
+
+#[cfg(all(test, feature = "shadowquic"))]
+mod jls_tests {
+    #[test]
+    fn jls_endpoints_require_a_runtime_owner_before_building() {
+        assert!(super::new_owned_jls_endpoint(|| panic!("unowned endpoint builder must not run")).is_err());
     }
 }

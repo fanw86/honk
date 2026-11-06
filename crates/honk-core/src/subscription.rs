@@ -161,6 +161,7 @@ impl<'a> AdmissionOwner<'a> {
         } = outcome;
         match kind {
             IndexedOutcomeKind::Node(node) => {
+                #[cfg(not(feature = "shadowquic"))]
                 if node.shadowquic().is_some() {
                     self.emit_indexed(
                         "unsupported-subscription-entry",
@@ -170,7 +171,7 @@ impl<'a> AdmissionOwner<'a> {
                         path,
                         (
                             Some("protocol"),
-                            "ShadowQUIC runtime support is not implemented in this build",
+                            "ShadowQUIC support is not enabled in this build",
                         ),
                     );
                     return;

@@ -1183,3 +1183,8 @@ uncommitted winner.
 - [Node reference](../reference/nodes.md)
 
 
+## Optional ShadowQUIC client
+
+The `shadowquic` feature selects an independent, ring-backed `quinn-jls` client. TCP streams share a cached connection; each UDP source association uses a separate authenticated connection so its control stream exclusively owns connection-wide datagram IDs. Datagram and uni-stream framing use bounded destination/reply tables, receive queues and pre-control reordering. Reliable writes poison an interrupted association rather than replaying partial frames. This first implementation trades an extra UDP handshake for simple ID ownership and does not reuse the BoringSSL stack's path telemetry.
+
+The feature includes owned tasks. JLS endpoint leases and worker joins are retained by the node's existing task owner, independently of reusable client ownership. Warm release preserves active streams and associations; terminal shutdown closes and joins them even when a detached speculative client did not become the cached client. Standalone APIs retain an ephemeral runtime guard. The core relay supervises ShadowQUIC half-close inactivity from the first observed EOF, resetting it on accepted reads/writes and bounding blocked shutdown; zero disables this deadline. Other protocols retain their existing relay path.

@@ -780,6 +780,7 @@ fn ignored_xhttp_options_are_type_checked_alike_in_both_spellings() {
     }
 }
 
+#[cfg(not(feature = "shadowquic"))]
 #[test]
 fn shadowquic_subscription_is_rejected_until_runtime_exists() {
     let uri =
@@ -814,4 +815,15 @@ fn shadowquic_subscription_is_rejected_until_runtime_exists() {
             assert!(!rendered.contains(private));
         }
     }
+}
+
+#[cfg(feature = "shadowquic")]
+#[test]
+fn shadowquic_subscription_accepts_enabled_uri() {
+    let body = "shadowquic://u:p@proxy.example?sni=cover.example#node";
+    let mut diagnostics = Vec::new();
+    let nodes = parse_subscription_content_with_diagnostics(&Subscription::default(), body, &mut diagnostics).unwrap();
+    assert_eq!(nodes.len(), 1);
+    assert!(nodes[0].shadowquic().is_some());
+    assert!(diagnostics.is_empty());
 }
