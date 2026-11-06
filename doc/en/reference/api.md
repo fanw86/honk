@@ -1454,7 +1454,7 @@ Download or extraction failures are logged and do not stop the engine.
   },
   warm: {
     nodes: { preconnect, health, udp, selector, traffic },
-    sessions: { anytls, vless, tuic, juicity, hysteria2 }
+    sessions: { anytls, vless, tuic, juicity, shadowquic, hysteria2 }
   },
   tcp: {
     activeFlows, limit, capacity: { rejected }
@@ -1785,6 +1785,7 @@ A one-second sampler reads the owned kernel queue independently of packet dispat
 | `warm.sessions.vless` | Retained VLESS pool sessions. |
 | `warm.sessions.tuic` | Occupied TUIC client slots. |
 | `warm.sessions.juicity` | Occupied Juicity client slots. |
+| `warm.sessions.shadowquic` | Occupied reusable ShadowQUIC client slots; zero when unavailable or cold. Does not count TCP streams or dedicated UDP associations. |
 | `warm.sessions.hysteria2` | Occupied Hysteria2 client slots. |
 
 A node may count under several explicit reasons. The gauges follow the current runtime generation; drained resources disappear from the next snapshot.

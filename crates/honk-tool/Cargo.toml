@@ -11,6 +11,7 @@ path = "src/main.rs"
 [features]
 default = ["rprx"]
 rprx = ["honk-outbound/rprx"]
+shadowquic = ["honk-core/shadowquic", "honk-outbound/shadowquic"]
 
 [dependencies]
 honk-config.workspace = true

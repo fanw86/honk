@@ -1,0 +1,72 @@
+name: ShadowQUIC core integration
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
+        with:
+          key: config-integration
+          cache-on-failure: true
+      - name: Preserve formatting patch
+        run: |
+          cargo fmt --all
+          git diff --binary > "$RUNNER_TEMP/rustfmt.patch"
+      - name: Configuration and feature-off admission
+        run: |
+          cargo test -p honk-config --locked
+          cargo test -p honk-core --lib --features native-api shadowquic --locked
+      - name: Feature-enabled core contracts
+        run: |
+          set -euo pipefail
+          for suite in stats:: subscription:: group:: routing::golden; do
+            cargo test -p honk-core --lib --features native-api,shadowquic "$suite" --locked -- --list > "$RUNNER_TEMP/selection.txt"
+            grep -q ': test$' "$RUNNER_TEMP/selection.txt"
+            cargo test -p honk-core --lib --features native-api,shadowquic "$suite" --locked
+          done
+          cargo test -p honk-core --test clash_api_test --features native-api,shadowquic stats_exposes_udp_metrics --locked
+      - name: Verify accumulation regression fails without the fix
+        run: |
+          set -euo pipefail
+          source=crates/honk-core/src/stats.rs
+          cp "$source" "$RUNNER_TEMP/stats.rs"
+          trap 'cp "$RUNNER_TEMP/stats.rs" "$source"' EXIT
+          sed -i '/NodeProtocol::ShadowQuic => self.shadowquic_clients/d' "$source"
+          set +e
+          cargo test -p honk-core --lib --features native-api,shadowquic warm_snapshot_routes_shadowquic_client_slots --locked > "$RUNNER_TEMP/ablation.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/ablation.log"
+          test "$result" -ne 0
+          grep -q 'warm_snapshot_routes_shadowquic_client_slots .*FAILED' "$RUNNER_TEMP/ablation.log"
+      - name: Generic group and probe regression checks
+        run: |
+          cargo test -p honk-outbound --lib --features shadowquic group:: --locked
+          cargo test -p honk-outbound --lib --features shadowquic urltest:: --locked
+      - name: Independent toolbox feature builds
+        run: |
+          cargo check -p honk-tool --no-default-features --locked
+          cargo run -p honk-tool --no-default-features --features shadowquic --locked -- --help
+      - name: Lint and workspace targets
+        run: |
+          cargo clippy -p honk-core -p honk-tool --all-targets --features honk-core/native-api,honk-tool/shadowquic --locked -- -D warnings
+          cargo check --workspace --all-targets --features honk-core/native-api,honk-tool/shadowquic --locked
+          git diff --exit-code
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: phase3-evidence
+          path: |
+            ${{ runner.temp }}/rustfmt.patch
+            ${{ runner.temp }}/ablation.log
+          retention-days: 14

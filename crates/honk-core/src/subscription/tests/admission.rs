@@ -832,3 +832,35 @@ fn shadowquic_subscription_accepts_enabled_uri() {
     assert!(nodes[0].shadowquic().is_some());
     assert!(diagnostics.is_empty());
 }
+
+#[test]
+fn shadowquic_structured_dialects_are_not_invented() {
+    for body in [
+        "proxies:\n  - {name: private-name, type: shadowquic, server: private-host, port: 443, username: private-user, password: private-password}\n  - {name: neighbor, type: socks5, server: 127.0.0.1, port: 1080}",
+        r#"{"outbounds":[{"type":"shadowquic","tag":"private-name","server":"private-host","server_port":443,"password":"private-password"},{"type":"socks","tag":"neighbor","server":"127.0.0.1","server_port":1080}]}"#,
+        "private-name = shadowquic, private-host, 443, username=private-user, password=private-password\nneighbor = socks5, 127.0.0.1, 1080",
+    ] {
+        let mut diagnostics = Vec::new();
+        let nodes = parse_subscription_content_with_diagnostics(&Subscription::default(), body, &mut diagnostics).unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].name, "neighbor");
+        assert!(!diagnostics.is_empty());
+        let rendered = format!("{diagnostics:?}");
+        for secret in ["private-name", "private-host", "private-user", "private-password"] {
+            assert!(!rendered.contains(secret));
+        }
+    }
+}
+
+#[test]
+fn shadowquic_uri_feature_boundary_is_consistent() {
+    use base64::Engine as _;
+    let body = "shadowquic://u:p@proxy.example?sni=cover.example#node\nsocks5://127.0.0.1:1080#neighbor";
+    for body in [body.to_string(), base64::engine::general_purpose::STANDARD.encode(body)] {
+        let mut diagnostics = Vec::new();
+        let nodes = parse_subscription_content_with_diagnostics(&Subscription::default(), &body, &mut diagnostics).unwrap();
+        assert_eq!(nodes.len(), if cfg!(feature = "shadowquic") { 2 } else { 1 });
+        assert_eq!(nodes.iter().filter(|node| node.shadowquic().is_some()).count(), usize::from(cfg!(feature = "shadowquic")));
+        assert_eq!(diagnostics.is_empty(), cfg!(feature = "shadowquic"));
+    }
+}

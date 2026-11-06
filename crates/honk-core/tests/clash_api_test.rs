@@ -2326,6 +2326,7 @@ async fn stats_exposes_udp_metrics() {
 
     // UDP is additive: existing dashboard keys retain their shapes.
     assert!(body["outbounds"].is_array());
+    assert_eq!(body["warm"]["sessions"]["shadowquic"].as_u64(), Some(0));
     assert!(body["pool"].is_object());
     assert!(body["quic"].is_object());
     assert!(body["quic"]["activeConnections"].is_u64());

@@ -106,6 +106,8 @@ CLI (`honk-core` binary):
 
 ### `crates/honk-tool`
 
+The optional toolbox `shadowquic` feature must enable both `honk-core/shadowquic` and `honk-outbound/shadowquic`, so subscription admission and probing agree. ShadowQUIC imports use native URI lists only; do not invent structured third-party dialect mappings. Clash `warm.sessions.shadowquic` counts retained client slots, not streams or UDP associations.
+
 The `honk-tool` CLI toolbox (bin crate, diagnostics that don't belong in the engine binary). Deps are honk-config + honk-outbound + honk-core (`default-features = false`, so no axum/aya). Subcommands:
 
 - `sub <url|file|-> [--target HOST:PORT] [--url TEST_URL] [--udp-check HOST[:PORT]] [--timeout SECS] [--concurrency N] [--limit N] [--ua UA] [--tls-implementation tls|utls] [--utls-imitate chrome_auto]` — fetch a subscription (or parse a share-link file/stdin URL) and probe TCP families, URLTest, and supported UDP paths. VMess and nodes whose `network` excludes UDP render UDP as `n/a`; eligible VLESS nodes probe the path selected from `udp_encoding`, multiplex, target port, and Vision policy. Output exposes only display name, fixed carrier/transport/path shape, and fixed result codes; credentials and raw errors are never rendered.

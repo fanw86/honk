@@ -360,6 +360,8 @@ TLS/SNI、REALITY、WebSocket/gRPC（包括 `Host` 以外的升级标头）、VL
 
 ### Surge、Surfboard、Loon 与 Quantumult X
 
+实验性 ShadowQUIC 仅通过原生 `shadowquic://` URI 列表导入（明文或 Base64），需启用 `shadowquic` 特性。这些客户端记录、Clash YAML 和 sing-box JSON 均未定义 ShadowQUIC 映射；不支持的条目会带诊断跳过，并保留有效的相邻节点。工具箱导入和探测需以 `--features shadowquic` 构建 `honk-tool`，同时启用核心加载器及出站处理器。
+
 导入器接受 Surge/Surfboard/Loon 的具名逗号分隔记录，以及 Quantumult X 的 `protocol=endpoint,...,tag=name` 记录。完整配置使用 `[Proxy]` 或 `[server_local]`；其他配置段会被忽略。带引号的名称/密码可以包含逗号、等号、转义引号和有意保留的首尾空格。
 
 显式凭据和加密方法别名在转换前须一致。具名记录仅在对应具名值缺失时使用位置参数；有效的显式值不会因位置参数不同而冲突。Quantumult X 不使用位置参数回退。显式空凭据参与别名比较，不会触发回退。

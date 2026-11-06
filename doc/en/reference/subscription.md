@@ -360,6 +360,8 @@ Explicit sing-box native VLESS UDP (`packet_encoding: ""`) maps to native. Enabl
 
 ### Surge, Surfboard, Loon, and Quantumult X
 
+Experimental ShadowQUIC imports accept native `shadowquic://` URI lists (plain or Base64) only, with the `shadowquic` feature enabled. No ShadowQUIC mapping is defined for these client records, Clash YAML or sing-box JSON; unsupported entries are skipped with diagnostics while valid neighbors survive. For toolbox imports and probes, build `honk-tool` with `--features shadowquic`; this enables both its core loader and outbound handler.
+
 The importer accepts named comma-separated records from Surge/Surfboard/Loon and `protocol=endpoint,...,tag=name` records from Quantumult X. Full profiles use `[Proxy]` or `[server_local]`; other sections are ignored. Quoted names/passwords may contain commas, equals signs, escaped quotes, and intentional edge spaces.
 
 Explicit credential and cipher aliases must agree before conversion. In named records, positional credentials are used only when the corresponding named claim is absent; a different positional value does not conflict with a valid explicit claim. Quantumult X has no positional fallback. Empty explicit credentials participate in alias comparison rather than selecting a fallback.

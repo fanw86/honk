@@ -478,6 +478,7 @@ pub struct WarmSnapshot {
     pub vless_sessions: u64,
     pub tuic_clients: u64,
     pub juicity_clients: u64,
+    pub shadowquic_clients: u64,
     pub hysteria2_clients: u64,
 }
 
@@ -493,6 +494,7 @@ impl WarmSnapshot {
             NodeProtocol::VLess => self.vless_sessions += counts.sessions as u64,
             NodeProtocol::Tuic => self.tuic_clients += counts.clients.unwrap_or(0) as u64,
             NodeProtocol::Juicity => self.juicity_clients += counts.clients.unwrap_or(0) as u64,
+            NodeProtocol::ShadowQuic => self.shadowquic_clients += counts.clients.unwrap_or(0) as u64,
             NodeProtocol::Hysteria2 => {
                 self.hysteria2_clients += counts.clients.unwrap_or(0) as u64;
             }
@@ -1237,6 +1239,20 @@ mod tests {
             },
         );
         assert_eq!(snapshot.vless_sessions, 2);
+    }
+
+    #[test]
+    fn warm_snapshot_routes_shadowquic_client_slots() {
+        let mut snapshot = WarmSnapshot::default();
+        for clients in [Some(2), None, Some(1)] {
+            snapshot.add_protocol_counts(
+                honk_config::types::NodeProtocol::ShadowQuic,
+                honk_outbound::runtime::WarmCounts { sessions: 99, clients },
+            );
+        }
+        assert_eq!(snapshot.shadowquic_clients, 3);
+        assert_eq!(snapshot.juicity_clients, 0);
+        assert_eq!(snapshot.hysteria2_clients, 0);
     }
 
     #[tokio::test]

@@ -1323,7 +1323,7 @@ URLTest、LoadBalance、Fallback 与 Score 拒绝手动选择。
   },
   warm: {
     nodes: { preconnect, health, udp, selector, traffic },
-    sessions: { anytls, vless, tuic, juicity, hysteria2 }
+    sessions: { anytls, vless, tuic, juicity, shadowquic, hysteria2 }
   },
   tcp: {
     activeFlows, limit, capacity: { rejected }
@@ -1650,6 +1650,7 @@ carrier 观测由控制心跳接入，与选路调用独立。
 | `warm.sessions.vless` | 保留的 VLESS 池会话数。 |
 | `warm.sessions.tuic` | 已占用的 TUIC 客户端槽位数。 |
 | `warm.sessions.juicity` | 已占用的 Juicity 客户端槽位数。 |
+| `warm.sessions.shadowquic` | 已占用的可复用 ShadowQUIC 客户端槽位数；未编译支持或冷状态时为零。不计 TCP 流或独立 UDP 关联。 |
 | `warm.sessions.hysteria2` | 已占用的 Hysteria2 客户端槽位数。 |
 
 一个节点可以同时计入多个显式原因。瞬时值跟随当前运行时代次；已排干资源会从下一次快照中消失。
