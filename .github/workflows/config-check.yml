@@ -1,0 +1,77 @@
+name: Configuration integration check
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit or branch to check
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read Rust pin
+        id: toolchain
+        run: echo "stable=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.stable }}
+          components: rustfmt
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: config-integration
+          cache-on-failure: true
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake clang libclang-dev pkg-config
+      - name: Format and preserve formatting patch
+        run: |
+          cargo fmt --all
+          git diff --binary > "$RUNNER_TEMP/rustfmt.patch"
+      - name: Configuration tests
+        run: cargo test -p honk-config --locked
+      - name: Confirm the valid URI fails on the Phase 0 baseline
+        env:
+          BASELINE: eade5bead429f9c4ea12e450dc60a44b99d27b62
+        run: |
+          set -euo pipefail
+          baseline_dir="$RUNNER_TEMP/config-baseline"
+          git worktree add --detach "$baseline_dir" "$BASELINE"
+          printf '\n#[test]\nfn shadowquic_uri_baseline_probe() { Node::from_share_link("shadowquic://u:p@h?sni=cover.example").unwrap(); }\n' >> "$baseline_dir/crates/honk-config/tests/share_link.rs"
+          set +e
+          CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" cargo test --manifest-path "$baseline_dir/Cargo.toml" -p honk-config --test share_link shadowquic_uri_baseline_probe --locked > "$RUNNER_TEMP/baseline.log" 2>&1
+          result=$?
+          set -e
+          cat "$RUNNER_TEMP/baseline.log"
+          test "$result" -ne 0
+          grep -q 'shadowquic_uri_baseline_probe .*FAILED' "$RUNNER_TEMP/baseline.log"
+      - name: Outbound runtime gate
+        run: |
+          cargo test -p honk-outbound --locked
+          cargo test -p honk-outbound --no-default-features --lib shadowquic_runtime --locked
+      - name: Core subscription gate and compilation
+        run: cargo test -p honk-core --lib --features native-api shadowquic_subscription --locked
+      - name: Check all workspace targets
+        run: cargo check --workspace --all-targets --features honk-core/native-api --locked
+      - name: Check formatting
+        run: git diff --exit-code
+      - name: Upload formatting patch
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: config-formatting
+          path: |
+            ${{ runner.temp }}/rustfmt.patch
+            ${{ runner.temp }}/baseline.log
+          retention-days: 14
