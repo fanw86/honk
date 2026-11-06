@@ -428,6 +428,9 @@ impl NodeRuntime {
 
     /// Validate a node before any one-shot runtime state is cloned or built.
     pub(crate) fn validate_for_ephemeral(node: &Node) -> Result<(), RuntimeRegistryError> {
+        if node.shadowquic().is_some() {
+            return Err(RuntimeRegistryError::ShadowQuicUnavailable);
+        }
         honk_config::node::validate_node_collection(std::slice::from_ref(node))
             .map_err(RuntimeRegistryError::Admission)
     }
@@ -730,6 +733,8 @@ fn same_node_config(a: &Node, b: &Node) -> bool {
 pub enum RuntimeRegistryError {
     #[error("registry node admission failed")]
     Admission(#[source] honk_config::error::DetailedConfigError),
+    #[error("ShadowQUIC runtime support is not implemented in this build")]
+    ShadowQuicUnavailable,
     #[error("node TLS configuration rejected")]
     Tls(#[source] Option<std::io::Error>),
 }
@@ -904,6 +909,9 @@ impl OutboundRuntimeRegistry {
     ) -> Result<(Self, HashSet<uuid::Uuid>), RuntimeRegistryError> {
         honk_config::node::validate_node_collection(nodes)
             .map_err(RuntimeRegistryError::Admission)?;
+        if nodes.iter().any(|node| node.shadowquic().is_some()) {
+            return Err(RuntimeRegistryError::ShadowQuicUnavailable);
+        }
         let own_tasks = cfg!(feature = "owned-tasks") && own_tasks;
         let mut map = HashMap::with_capacity(nodes.len());
         let mut reused = HashSet::new();

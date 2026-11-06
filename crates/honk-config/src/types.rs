@@ -13,6 +13,7 @@ pub enum NodeProtocol {
     Hysteria2,
     Tuic,
     Juicity,
+    ShadowQuic,
     AnyTLS,
     /// Built-in bypass outbound; reserved, not a configurable protocol.
     Direct,
@@ -31,6 +32,7 @@ impl NodeProtocol {
             NodeProtocol::Hysteria2 => "hysteria2",
             NodeProtocol::Tuic => "tuic",
             NodeProtocol::Juicity => "juicity",
+            NodeProtocol::ShadowQuic => "shadowquic",
             NodeProtocol::AnyTLS => "anytls",
             NodeProtocol::Direct => "direct",
             NodeProtocol::Block => "block",
@@ -51,6 +53,7 @@ impl std::str::FromStr for NodeProtocol {
             "hysteria2" => Ok(NodeProtocol::Hysteria2),
             "tuic" => Ok(NodeProtocol::Tuic),
             "juicity" => Ok(NodeProtocol::Juicity),
+            "shadowquic" => Ok(NodeProtocol::ShadowQuic),
             "anytls" => Ok(NodeProtocol::AnyTLS),
             "direct" => Ok(NodeProtocol::Direct),
             "block" => Ok(NodeProtocol::Block),

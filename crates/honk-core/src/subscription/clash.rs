@@ -375,6 +375,7 @@ fn apply_protocol(mapping: &Mapping, node: &mut Node) -> Result<(), &'static str
             config.idle_session_timeout =
                 yaml_duration_alias(mapping, &["idle-session-timeout", "idle_session_timeout"])?;
         }
+        OutboundConfig::ShadowQuic(_) => return Err("unsupported ShadowQUIC import format"),
         OutboundConfig::Direct | OutboundConfig::Block => unreachable!(),
     }
     Ok(())

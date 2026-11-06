@@ -27,6 +27,7 @@ use crate::node::{Node, OutboundConfig, ShadowsocksConfig};
 use crate::options::vocab::{optional_text, vmess_cipher, xhttp_stream_transport};
 
 mod options;
+mod shadowquic;
 mod xhttp;
 
 impl Node {
@@ -192,13 +193,14 @@ fn node_from_url(url: &url::Url, source: &SourceRef) -> Result<Node, DetailedCon
         "hysteria2" | "hysteria" | "hy2" => OutboundConfig::Hysteria2(Default::default()),
         "tuic" => OutboundConfig::Tuic(Default::default()),
         "juicity" => OutboundConfig::Juicity(Default::default()),
+        "shadowquic" => OutboundConfig::ShadowQuic(Default::default()),
         _ => {
             return Err(DetailedConfigError::new(
                 ErrorCategory::UnknownProtocol,
                 "unknown-protocol",
                 source.clone(),
                 SettingPath::new("config").field("protocol"),
-                "unknown node protocol; expected socks5, socks4, socks4a, ss, trojan, anytls, vmess, vless, hysteria2, hysteria, hy2, tuic or juicity",
+                "unknown node protocol; expected socks5, socks4, socks4a, ss, trojan, anytls, vmess, vless, hysteria2, hysteria, hy2, tuic, juicity or shadowquic",
             ));
         }
     };
@@ -249,6 +251,10 @@ fn node_from_url(url: &url::Url, source: &SourceRef) -> Result<Node, DetailedCon
             }
             OutboundConfig::Juicity(config) => {
                 config.uuid = username()?;
+                config.password = password()?;
+            }
+            OutboundConfig::ShadowQuic(config) => {
+                config.username = username()?;
                 config.password = password()?;
             }
             OutboundConfig::AnyTls(config) => config.password = single()?,

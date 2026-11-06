@@ -177,6 +177,15 @@ static DESCRIPTORS: &[ProtocolDescriptor] = &[
         generation_runtime: GenerationRuntime::Quic,
         share_link_schemes: &["juicity"],
     },
+    ProtocolDescriptor {
+        protocol: NodeProtocol::ShadowQuic,
+        supports_udp: never,
+        pool_ready_streams: never,
+        pool_bare_tcp: never,
+        supports_warm: no_warm,
+        generation_runtime: GenerationRuntime::None,
+        share_link_schemes: &["shadowquic"],
+    },
     // Multiplexed: the node-owned session pool already keeps reusable
     // connections. Bare-TCP or ready-stream pooling would bypass that owner,
     // creating an untracked TLS/auth session outside its lifecycle.
@@ -239,6 +248,7 @@ mod tests {
             NodeProtocol::Hysteria2,
             NodeProtocol::Tuic,
             NodeProtocol::Juicity,
+            NodeProtocol::ShadowQuic,
             NodeProtocol::AnyTLS,
             NodeProtocol::Direct,
             NodeProtocol::Block,

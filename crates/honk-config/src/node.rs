@@ -4,12 +4,14 @@ use serde::{Deserialize, Serialize};
 
 mod headers;
 mod protocol;
+mod shadowquic;
 mod validation;
 mod vless;
 mod wire;
 mod xhttp;
 
 pub use protocol::*;
+pub use shadowquic::ShadowQuicConfig;
 pub use validation::validate_node_collection;
 pub use vless::*;
 pub use wire::NodeSeed;
@@ -255,6 +257,20 @@ impl Node {
     pub fn tuic_mut(&mut self) -> Option<&mut TuicConfig> {
         match &mut self.outbound {
             OutboundConfig::Tuic(config) => Some(config),
+            _ => None,
+        }
+    }
+
+    pub fn shadowquic(&self) -> Option<&ShadowQuicConfig> {
+        match &self.outbound {
+            OutboundConfig::ShadowQuic(config) => Some(config),
+            _ => None,
+        }
+    }
+
+    pub fn shadowquic_mut(&mut self) -> Option<&mut ShadowQuicConfig> {
+        match &mut self.outbound {
+            OutboundConfig::ShadowQuic(config) => Some(config),
             _ => None,
         }
     }

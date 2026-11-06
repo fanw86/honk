@@ -4,7 +4,7 @@ use super::headers;
 use super::validation::ValidationFailure;
 use crate::types::NodeProtocol;
 
-use super::{VlessConfig, identity_field};
+use super::{ShadowQuicConfig, VlessConfig, identity_field};
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct TlsOptions {
@@ -253,6 +253,7 @@ pub enum OutboundConfig {
     Hysteria2(Hysteria2Config),
     Tuic(TuicConfig),
     Juicity(JuicityConfig),
+    ShadowQuic(ShadowQuicConfig),
     AnyTls(AnyTlsConfig),
     Direct,
     Block,
@@ -275,6 +276,7 @@ impl OutboundConfig {
             NodeProtocol::Hysteria2 => Self::Hysteria2(Hysteria2Config::default()),
             NodeProtocol::Tuic => Self::Tuic(TuicConfig::default()),
             NodeProtocol::Juicity => Self::Juicity(JuicityConfig::default()),
+            NodeProtocol::ShadowQuic => Self::ShadowQuic(ShadowQuicConfig::default()),
             NodeProtocol::AnyTLS => Self::AnyTls(AnyTlsConfig::default()),
             NodeProtocol::Direct => Self::Direct,
             NodeProtocol::Block => Self::Block,
@@ -291,6 +293,7 @@ impl OutboundConfig {
             Self::Hysteria2(_) => NodeProtocol::Hysteria2,
             Self::Tuic(_) => NodeProtocol::Tuic,
             Self::Juicity(_) => NodeProtocol::Juicity,
+            Self::ShadowQuic(_) => NodeProtocol::ShadowQuic,
             Self::AnyTls(_) => NodeProtocol::AnyTLS,
             Self::Direct => NodeProtocol::Direct,
             Self::Block => NodeProtocol::Block,
@@ -306,7 +309,7 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&config.quic.tls),
             Self::Juicity(config) => Some(&config.quic.tls),
             Self::AnyTls(config) => Some(&config.tls),
-            Self::Shadowsocks(_) | Self::Socks5(_) | Self::Direct | Self::Block => None,
+            Self::Shadowsocks(_) | Self::Socks5(_) | Self::ShadowQuic(_) | Self::Direct | Self::Block => None,
         }
     }
 
@@ -319,7 +322,7 @@ impl OutboundConfig {
             Self::Tuic(config) => Some(&mut config.quic.tls),
             Self::Juicity(config) => Some(&mut config.quic.tls),
             Self::AnyTls(config) => Some(&mut config.tls),
-            Self::Shadowsocks(_) | Self::Socks5(_) | Self::Direct | Self::Block => None,
+            Self::Shadowsocks(_) | Self::Socks5(_) | Self::ShadowQuic(_) | Self::Direct | Self::Block => None,
         }
     }
 
@@ -391,6 +394,10 @@ impl OutboundConfig {
                 config.uuid.as_deref().unwrap_or(""),
                 config.password.as_deref().unwrap_or(""),
             ]),
+            Self::ShadowQuic(config) => identity_join(&[
+                config.username.as_deref().unwrap_or(""),
+                config.password.as_deref().unwrap_or(""),
+            ]),
             Self::AnyTls(config) => identity_join(&[config.password.as_deref().unwrap_or("")]),
             Self::Direct | Self::Block => String::new(),
         }
@@ -455,6 +462,13 @@ impl OutboundConfig {
             } else {
                 "|xhttp-tls:0"
             });
+        }
+        if let Self::ShadowQuic(config) = self {
+            fingerprint.push_str("|shadowquic:");
+            fingerprint.push_str(&serde_json::to_string(&(
+                &config.server_name, &config.alpn, &config.congestion,
+                config.zero_rtt, config.over_stream,
+            )).expect("ShadowQUIC dial options serialize"));
         }
         fingerprint
     }

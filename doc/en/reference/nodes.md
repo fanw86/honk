@@ -680,3 +680,20 @@ For a chain written as `a -> b`, only `a` is parsed. Automatic names come only f
 - [Subscription reference](./subscription.md)
 - [Group reference](./groups.md)
 - [Outbound design](../design/outbound.md)
+## Experimental ShadowQUIC configuration
+
+The integration fork recognizes the proposed `shadowquic://` scheme for configuration development. This scheme is experimental and has no upstream interoperability guarantee. **The outbound handler is not implemented yet**: runtime admission rejects these nodes and subscriptions discard them with an unsupported-entry diagnostic.
+
+```dae
+node {
+    'shadowquic://username:password@proxy.example:443?sni=cover.example&alpn=h3#example'
+}
+```
+
+Both credentials and `sni` (alias `peer`) are required. Percent-encode reserved credential characters. JLS supplies authentication; ordinary TLS, REALITY, certificate-verification and stream-transport options are rejected.
+
+Optional query fields are `alpn` (comma-separated, default `h3`), `congestion` (`bbr`, `cubic`, `new_reno`; default `bbr`), `zero-rtt` (default `true`), `over-stream` (default `false`), `mtu` (1200–65527), and `half-close-timeout` (nonnegative milliseconds; omitted means 60000 at runtime). Boolean values accept `0`/`1` or `false`/`true`. Duplicate parameters and server-name aliases must agree; unknown options fail.
+
+Internal flat records use `shadowquic_username`, `shadowquic_password`, `shadowquic_server_name`, `shadowquic_alpn` (array), `shadowquic_congestion`, `shadowquic_zero_rtt`, `shadowquic_over_stream`, `shadowquic_half_close_timeout`, and `quic_mtu`. Generic `username`/`password` and `sni`/`server_name` aliases must agree with dedicated values. ShadowQUIC fields on another protocol fail validation.
+
+Identity includes credentials, JLS server name, ALPN order, congestion and effective zero-RTT/stream modes. Omitted and explicit defaults share an ID; MTU, half-close tuning and display names do not change it. Existing protocol identities remain unchanged.

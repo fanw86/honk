@@ -76,6 +76,7 @@ pub(super) fn normalize(value: Value) -> NodeResult {
         NodeProtocol::Tuic => normalize_tuic(source, proxy),
         NodeProtocol::Juicity => normalize_juicity(source, proxy),
         NodeProtocol::AnyTLS => normalize_anytls(source, proxy),
+        NodeProtocol::ShadowQuic => return Err("unsupported ShadowQUIC import format"),
         NodeProtocol::Direct | NodeProtocol::Block => unreachable!(),
     }
     .map(NormalizedEntry::Node)

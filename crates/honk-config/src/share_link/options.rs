@@ -122,6 +122,9 @@ pub(super) fn parse_query(
             "vless_mode/packetEncoding are valid only for VLESS share links".into(),
         )));
     }
+    if protocol == NodeProtocol::ShadowQuic {
+        super::shadowquic::check_query(&query, source)?;
+    }
     if shadowrocket_vmess {
         vmess_cipher(
             query
@@ -502,6 +505,7 @@ pub(super) fn apply_protocol(
             apply_mtu(&mut config.quic, query);
         }
         OutboundConfig::Juicity(config) => apply_mtu(&mut config.quic, query),
+        OutboundConfig::ShadowQuic(config) => super::shadowquic::apply(config, query, source)?,
         OutboundConfig::AnyTls(config) => {
             config.idle_session_check_interval = query
                 .get("idle_session_check_interval")

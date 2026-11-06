@@ -677,3 +677,20 @@ REALITY 不使用 CA 校验或 `skip_cert_verify`。目标 TLS 记录的缓冲�
 - [订阅参考](./subscription.md)
 - [组参考](./groups.md)
 - [出站设计](../design/outbound.md)
+## 实验性 ShadowQUIC 配置
+
+集成分支可解析提议的 `shadowquic://` 配置链接。该格式处于实验阶段，不保证上游互通。**出站处理器尚未实现**：运行时拒绝此类节点，订阅会丢弃它们并报告不支持的条目。
+
+```dae
+node {
+    'shadowquic://username:password@proxy.example:443?sni=cover.example&alpn=h3#example'
+}
+```
+
+必须提供用户名、密码及 `sni`（别名 `peer`）。凭据中的保留字符需百分号编码。认证由 JLS 提供；普通 TLS、REALITY、证书校验和流传输选项均被拒绝。
+
+可选参数包括：`alpn`（逗号分隔，默认 `h3`）、`congestion`（`bbr`、`cubic`、`new_reno`，默认 `bbr`）、`zero-rtt`（默认 `true`）、`over-stream`（默认 `false`）、`mtu`（1200–65527）以及 `half-close-timeout`（非负毫秒数，省略时运行时默认 60000）。布尔值接受 `0`/`1` 或 `false`/`true`。重复参数及服务器名称别名必须一致；未知选项直接报错。
+
+内部扁平记录使用 `shadowquic_username`、`shadowquic_password`、`shadowquic_server_name`、`shadowquic_alpn`（数组）、`shadowquic_congestion`、`shadowquic_zero_rtt`、`shadowquic_over_stream`、`shadowquic_half_close_timeout` 及 `quic_mtu`。通用 `username`/`password` 和 `sni`/`server_name` 别名必须与专用字段一致。其他协议不可使用 ShadowQUIC 字段。
+
+节点身份包含凭据、JLS 服务器名称、ALPN 顺序、拥塞控制及生效的零 RTT 和流模式。省略选项与显式默认值使用相同 ID；MTU、半关闭超时和显示名称不影响 ID。现有协议身份保持不变。

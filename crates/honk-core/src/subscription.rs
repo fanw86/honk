@@ -161,6 +161,11 @@ impl<'a> AdmissionOwner<'a> {
         } = outcome;
         match kind {
             IndexedOutcomeKind::Node(node) => {
+                if node.shadowquic().is_some() {
+                    self.emit_indexed("unsupported-subscription-entry", Severity::Warning,
+                        ordinal, line, path, (Some("protocol"), "ShadowQUIC runtime support is not implemented in this build"));
+                    return;
+                }
                 if node.shadowsocks().is_some_and(|config| {
                     config
                         .plugin

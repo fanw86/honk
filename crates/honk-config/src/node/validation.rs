@@ -201,6 +201,9 @@ impl Node {
         if let Some(config) = self.vless() {
             config.validate_fields()?;
         }
+        if let Some(config) = self.shadowquic() {
+            config.validate()?;
+        }
         let Some(tls) = self.tls() else { return Ok(()) };
         tls.validate_alpn()?;
         let reality = tls
