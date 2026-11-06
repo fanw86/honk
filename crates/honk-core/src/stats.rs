@@ -494,7 +494,9 @@ impl WarmSnapshot {
             NodeProtocol::VLess => self.vless_sessions += counts.sessions as u64,
             NodeProtocol::Tuic => self.tuic_clients += counts.clients.unwrap_or(0) as u64,
             NodeProtocol::Juicity => self.juicity_clients += counts.clients.unwrap_or(0) as u64,
-            NodeProtocol::ShadowQuic => self.shadowquic_clients += counts.clients.unwrap_or(0) as u64,
+            NodeProtocol::ShadowQuic => {
+                self.shadowquic_clients += counts.clients.unwrap_or(0) as u64
+            }
             NodeProtocol::Hysteria2 => {
                 self.hysteria2_clients += counts.clients.unwrap_or(0) as u64;
             }
@@ -1247,7 +1249,10 @@ mod tests {
         for clients in [Some(2), None, Some(1)] {
             snapshot.add_protocol_counts(
                 honk_config::types::NodeProtocol::ShadowQuic,
-                honk_outbound::runtime::WarmCounts { sessions: 99, clients },
+                honk_outbound::runtime::WarmCounts {
+                    sessions: 99,
+                    clients,
+                },
             );
         }
         assert_eq!(snapshot.shadowquic_clients, 3);
