@@ -1,5 +1,7 @@
 # ShadowQUIC 集成分支
 
+版本化 fork 预发行使用 `shadowquic-vMAJOR.MINOR.PATCH-beta.N` 标签，由专用 **ShadowQUIC release** 工作流重建两个架构并发布固定 UI 的二进制、对应源码及 `SHA256SUMS`。标准 `v*` 标签仍使用独立的上游发行配置。
+
 实验包包含可选的 JLS ShadowQUIC 出站及经过测试的 doona 完整版与精简版。上游标准发行包不包含此集成功能。手动 **Fork build** 工作流需设置 `shadowquic=true`、完整的 `doona_sha`，并选择 `x86_64-unknown-linux-musl` 或 `aarch64-unknown-linux-musl`；默认编译特性不变。
 
 ## 校验软件包和源码

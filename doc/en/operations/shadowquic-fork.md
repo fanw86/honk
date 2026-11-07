@@ -1,5 +1,7 @@
 # ShadowQUIC integration fork
 
+Versioned fork prereleases use `shadowquic-vMAJOR.MINOR.PATCH-beta.N` tags and the dedicated **ShadowQUIC release** workflow. It rebuilds both architectures with the pinned UI and publishes verified binaries, corresponding sources and `SHA256SUMS`. Standard `v*` tags use the separate upstream release configuration.
+
 These experimental packages combine the optional JLS-authenticated ShadowQUIC handler with the tested full and lite doona UIs. Standard upstream releases do not include this fork integration. The manual **Fork build** workflow accepts `shadowquic=true`, a full `doona_sha`, and either `x86_64-unknown-linux-musl` or `aarch64-unknown-linux-musl`. Default compilation remains unchanged.
 
 ## Package and source verification
@@ -56,7 +58,7 @@ experimental {
 }
 ```
 
-Keep this credential include read-only to API writes; the engine enforces that boundary. The main source can then hold editable nodes/groups. Select `ui: embedded-lite` for lite instead; both editions are embedded, and the chosen edition is served at `/ui/`. Changing native settings requires a local edit and restart. See [native API configuration](../reference/experimental.md#native-api) for authentication and write restrictions.
+Keep this credential include read-only to API writes; the engine enforces that boundary. The main source can then hold editable nodes/groups. Select `ui: embedded-lite` for lite instead; both editions are embedded, and the chosen edition is served at `/ui/`. Changing native settings requires a local edit and restart. See [native API configuration](../reference/experimental.md#native_api) for authentication and write restrictions.
 
 After reviewing the complete configuration:
 

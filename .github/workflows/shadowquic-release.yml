@@ -1,0 +1,79 @@
+name: ShadowQUIC release
+on:
+  push:
+    tags: [shadowquic-v*]
+permissions:
+  contents: read
+concurrency:
+  group: shadowquic-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Validate fork release version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^shadowquic-v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]
+          version=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml)
+          [[ "$TAG" == "shadowquic-v$version-beta."* ]]
+          grep -Fq "## [$TAG]" CHANGELOG.md
+      - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8
+        with:
+          args: --offline --include-fragments 'README*.md' 'doc/**/*.md'
+          fail: true
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-unknown-linux-musl, aarch64-unknown-linux-musl]
+    uses: ./.github/workflows/fork-build.yml
+    with:
+      target: ${{ matrix.target }}
+      doona_sha: 4c45065cdf47caaf3788a4c034c1ff29b18a25b6
+      shadowquic: true
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        with:
+          path: incoming
+      - name: Verify and assemble release assets
+        env:
+          TAG: ${{ github.ref_name }}
+          HONK_SHA: ${{ github.sha }}
+        run: python3 ci/shadowquic-release.py incoming dist "$TAG" "$HONK_SHA"
+      - name: Require successful main CI for the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          id=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&per_page=10" --jq '.workflow_runs[] | select(.head_branch == "main") | .id' | head -n 1)
+          test -n "$id"
+          gh run watch "$id" --exit-status --interval 30
+      - name: Create verified draft and publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to replace published assets.' >&2
+            exit 1
+          fi
+          gh release create "$TAG" dist/* --verify-tag --draft --prerelease --latest=false --title "ShadowQUIC $TAG" --notes-file .github/shadowquic-release-notes.md
+          gh release edit "$TAG" --draft=false --prerelease --latest=false

@@ -2,6 +2,17 @@
 name: Fork build
 
 on:
+  workflow_call:
+    inputs:
+      target:
+        required: true
+        type: string
+      doona_sha:
+        required: true
+        type: string
+      shadowquic:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       target:
@@ -61,7 +72,9 @@ jobs:
           else
             prefix=${GITHUB_REF_NAME//\//-}
           fi
-          [[ "$ENABLE_SHADOWQUIC" != true ]] || prefix+=-shadowquic
+          if [[ "$ENABLE_SHADOWQUIC" == true && "$prefix" != shadowquic-* ]]; then
+            prefix+=-shadowquic
+          fi
           echo "ARTIFACT_NAME=honk-core-$prefix-${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}" >> "$GITHUB_ENV"
 
       - name: Read Rust toolchains

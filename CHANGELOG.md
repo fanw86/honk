@@ -6,6 +6,16 @@ This changelog follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 Entries live in [changes/](changes/) until release.
 
+## [shadowquic-v0.1.0-beta.1] - 2026-11-07
+
+### Added
+
+- Experimental fork release with JLS-authenticated ShadowQUIC TCP and both UDP modes, runtime ownership and half-close handling.
+- Full/lite doona editing, native URI subscription admission, probe integration and retained-client reporting.
+- Versioned x86_64/ARM64 static packages with pinned corresponding sources, licenses/notices, build manifests and checksums.
+
+This namespaced fork prerelease is separate from upstream version tags and container publication. ARM64 is cross-compiled only; target-machine deployment remains unverified.
+
 ## [0.1.0-beta.5] - 2026-11-03
 
 ### Added
