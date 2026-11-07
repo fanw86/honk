@@ -683,7 +683,7 @@ For a chain written as `a -> b`, only `a` is parsed. Automatic names come only f
 
 ## Experimental ShadowQUIC configuration
 
-The integration fork supports the proposed `shadowquic://` scheme behind honk-core's optional `shadowquic` Cargo feature, alongside the normal deployment features. The scheme is experimental; compatibility is tested against the pinned reference server. Builds without the feature reject runtime admission and discard these subscription entries. Simple URI subscriptions are supported; structured Clash/sing-box imports and doona editing follow separately.
+The integration fork supports the proposed `shadowquic://` scheme behind honk-core's optional `shadowquic` Cargo feature, alongside the normal deployment features. The scheme is experimental; compatibility is tested against the pinned reference server. Builds without the feature reject runtime admission and discard these subscription entries. Simple URI subscriptions and forked full/lite doona editing are supported. Structured Clash/sing-box imports remain unsupported. See the [fork packaging guide](../operations/shadowquic-fork.md).
 
 ```dae
 node {

@@ -15,7 +15,11 @@ on:
         description: Full commit SHA from fanw86/doona to embed
         type: string
         required: true
-        default: 8a4c2c8a44755d86f7b1ef572a07b2611892f6bd
+        default: 4c45065cdf47caaf3788a4c034c1ff29b18a25b6
+      shadowquic:
+        description: Include the experimental ShadowQUIC handler
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,6 +52,8 @@ jobs:
       # Manual runs can select a branch whose name contains '/', which cannot
       # appear in an asset path. Tags keep the existing debug/v* spelling.
       - name: Resolve artifact name
+        env:
+          ENABLE_SHADOWQUIC: ${{ inputs.shadowquic }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/debug.* ]]; then
@@ -55,6 +61,7 @@ jobs:
           else
             prefix=${GITHUB_REF_NAME//\//-}
           fi
+          [[ "$ENABLE_SHADOWQUIC" != true ]] || prefix+=-shadowquic
           echo "ARTIFACT_NAME=honk-core-$prefix-${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}" >> "$GITHUB_ENV"
 
       - name: Read Rust toolchains
@@ -189,6 +196,8 @@ jobs:
       # clash-api. Allocator variants keep the same protocol and API features.
       - name: Resolve feature set
         shell: bash
+        env:
+          ENABLE_SHADOWQUIC: ${{ inputs.shadowquic }}
         run: |
           set -euo pipefail
           case "${{ matrix.variant }}" in
@@ -198,6 +207,7 @@ jobs:
             *) printf 'unknown variant: %s\n' "${{ matrix.variant }}" >&2; exit 1 ;;
           esac
           features="ebpf,rprx,$features"
+          [[ "$ENABLE_SHADOWQUIC" != true ]] || features+=,shadowquic
           if [[ "${{ matrix.suffix }}" != "-stock" ]]; then
             features+=,jemalloc
           fi
@@ -207,7 +217,7 @@ jobs:
       # targets were installed above; the eBPF crate has its own nightly pin.
       - name: Build honk-core (native gnu)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
-        run: cargo build --release -p honk-core --no-default-features --features "$FEATURES" --target ${{ matrix.target }}
+        run: cargo build --locked --release -p honk-core --no-default-features --features "$FEATURES" --target ${{ matrix.target }}
 
       - name: Build honk-core (cross via zig wrappers)
         if: matrix.target != 'x86_64-unknown-linux-gnu'
@@ -232,7 +242,7 @@ jobs:
           # point it at zig's target headers, not the host's.
           BINDGEN_EXTRA_CLANG_ARGS="$(ci/zig-bindgen-env "$ZIGCC_TARGET")"
           export BINDGEN_EXTRA_CLANG_ARGS
-          cargo build --release -p honk-core --no-default-features --features "$FEATURES" --target "$T"
+          cargo build --locked --release -p honk-core --no-default-features --features "$FEATURES" --target "$T"
 
       - name: Package artifact
         run: |
@@ -240,7 +250,15 @@ jobs:
           name="$ARTIFACT_NAME"
           mkdir -p "dist/$name"
           cp "target/${{ matrix.target }}/release/honk-core" "dist/$name/"
-          cp LICENSE README.md "dist/$name/"
+          cp LICENSE README.md README.zh.md install/honk-core.service config.min.dae "dist/$name/"
+          cp doc/en/operations/shadowquic-fork.md "dist/$name/SHADOWQUIC.md"
+          cp doc/zh/operations/shadowquic-fork.md "dist/$name/SHADOWQUIC.zh.md"
+          {
+            printf 'honk_revision=%s\n' "$(git rev-parse HEAD)"
+            printf 'doona_revision=%s\n' "$(cat doona-revision.txt)"
+            printf 'target=%s\nfeatures=%s\n' '${{ matrix.target }}' "$FEATURES"
+            printf 'workflow_run=%s/%s/actions/runs/%s\n' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+          } > "dist/$name/BUILD-INFO.txt"
           # Both editions keep their own notices. Their GPL-3.0-only license must
           # match the top-level LICENSE; lean variants embed neither edition.
           if [[ "${{ matrix.variant }}" == full ]]; then
@@ -256,6 +274,7 @@ jobs:
             done
           fi
           tar -czf "$name.tar.gz" -C dist "$name"
+          sha256sum "$name.tar.gz" fork-honk-source.tar.gz fork-doona-source.tar.gz > SHA256SUMS
 
       - name: Start the packaged x86_64 artifact
         if: startsWith(matrix.target, 'x86_64-')
@@ -265,10 +284,13 @@ jobs:
           trap 'rm -rf "$smoke_dir"' EXIT
           tar -xzf "$ARTIFACT_NAME.tar.gz" -C "$smoke_dir"
           "$smoke_dir/$ARTIFACT_NAME/honk-core" --version
+          "$smoke_dir/$ARTIFACT_NAME/honk-core" --help
 
       - name: Upload artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: honk-core-${{ matrix.target }}${{ matrix.suffix }}${{ matrix.name_suffix }}
-          path: ${{ env.ARTIFACT_NAME }}.tar.gz
+          path: |
+            ${{ env.ARTIFACT_NAME }}.tar.gz
+            SHA256SUMS
           retention-days: 14

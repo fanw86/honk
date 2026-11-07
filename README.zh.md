@@ -18,6 +18,8 @@ honk 的 eBPF 数据面和配置语法参考 dae 的设计，出站组与 Clash 
 
 ## 功能概览
 
+本集成分支提供可选的实验性 ShadowQUIC TCP/UDP 及 doona 完整版/精简版编辑功能。手动 fork 构建需设置 `shadowquic=true`；上游发行包及默认特性保持不变。详见 [fork 构建与安装指南](doc/zh/operations/shadowquic-fork.md)。
+
 - 透明 TCP/UDP：通过 TC eBPF、`dae0`/`daens` 和编译路由处理 LAN 转发及本机发起的流量。
 - 出站：SOCKS5、Shadowsocks/2022、Trojan、AnyTLS、Hysteria2、TUIC、Juicity、VMess、VLESS、`direct` 和 `block`。Trojan/VMess/VLESS 支持 H2 XHTTP（`packet-up`、`stream-up`、`stream-one`）；VMess 仅支持 TCP。详见[协议限制](doc/zh/reference/nodes.md)。
 - 组策略：Selector（默认）、URLTest、LoadBalance、Fallback 和 Score。Score 使用业务观测与有界验证，详见[组策略参考](doc/zh/reference/groups.md#score-策略)。

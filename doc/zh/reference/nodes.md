@@ -680,7 +680,7 @@ REALITY 不使用 CA 校验或 `skip_cert_verify`。目标 TLS 记录的缓冲�
 
 ## 实验性 ShadowQUIC 配置
 
-集成分支通过 honk-core 的可选 Cargo 特性 `shadowquic` 支持提议的 `shadowquic://` 链接，需与正常部署特性一同启用。链接格式仍属实验性，兼容性针对固定版本的参考服务器测试。未启用该特性的构建会拒绝运行时接纳并丢弃此类订阅条目。已支持简单 URI 订阅；结构化 Clash/sing-box 导入和 doona 编辑将单独实现。
+集成分支通过 honk-core 的可选 Cargo 特性 `shadowquic` 支持提议的 `shadowquic://` 链接，需与正常部署特性一同启用。链接格式仍属实验性，兼容性针对固定版本的参考服务器测试。未启用该特性的构建会拒绝运行时接纳并丢弃此类订阅条目。已支持简单 URI 订阅及 fork 版 doona 完整版/精简版编辑；结构化 Clash/sing-box 导入仍不支持。详见 [fork 打包指南](../operations/shadowquic-fork.md)。
 
 ```dae
 node {

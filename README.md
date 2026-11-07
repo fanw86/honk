@@ -18,6 +18,8 @@ honk follows the design of dae's eBPF datapath and configuration syntax, and of 
 
 ## Capabilities
 
+This integration fork provides optional experimental ShadowQUIC TCP/UDP and full/lite doona editing. Use the manual fork build with `shadowquic=true`; upstream release binaries and default features are unchanged. See the [fork build and installation guide](doc/en/operations/shadowquic-fork.md).
+
 - Transparent TCP/UDP for LAN-forwarded and host-originated traffic through TC eBPF, `dae0`/`daens`, and compiled routing.
 - Outbounds: SOCKS5, Shadowsocks/2022, Trojan, AnyTLS, Hysteria2, TUIC, Juicity, VMess, VLESS, `direct`, and `block`. Trojan/VMess/VLESS support H2 XHTTP (`packet-up`, `stream-up`, `stream-one`); VMess is TCP-only. See [protocol limits](doc/en/reference/nodes.md).
 - Groups: Selector (the default), URLTest, LoadBalance, Fallback, and Score. Score uses business observations and bounded validation; see [group policies](doc/en/reference/groups.md#score-policy).
